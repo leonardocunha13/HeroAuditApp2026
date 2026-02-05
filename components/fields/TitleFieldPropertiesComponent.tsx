@@ -30,7 +30,7 @@ export function PropertiesComponent({
     mode: "onBlur",
     defaultValues: {
       title: element.extraAttributes.title,
-      backgroundColor: element.extraAttributes.backgroundColor || "transparent", // default to transparent
+      backgroundColor: element.extraAttributes.backgroundColor || "#ffffff", // default to white
       textColor: element.extraAttributes.textColor || "#000000", // default to black
       textAlign: element.extraAttributes.textAlign as "center",
       noBackground: element.extraAttributes.backgroundColor === "transparent",
@@ -38,14 +38,9 @@ export function PropertiesComponent({
     },
   });
 
-useEffect(() => {
-  form.reset({
-    ...element.extraAttributes,
-    backgroundColor: element.extraAttributes.backgroundColor ?? "transparent",
-    noBackground: element.extraAttributes.backgroundColor === "transparent",
-    fontSize: element.extraAttributes.fontSize ?? 24,
-  });
-}, [element, form]);
+  useEffect(() => {
+    form.reset(element.extraAttributes as propertiesFormSchemaType);
+  }, [element, form]);
 
   function applyChanges(values: propertiesFormSchemaType) {
     const { title, backgroundColor, textColor, textAlign, noBackground, repeatOnPageBreak } = values;
@@ -104,19 +99,15 @@ useEffect(() => {
                     disabled={form.watch("noBackground")}
                   />
                   <div className="mt-2 flex items-center space-x-2">
-<Checkbox
-  checked={form.watch("noBackground")}
-  onCheckedChange={(checked: boolean) => {
-    form.setValue("noBackground", checked);
-
-    if (checked) {
-      form.setValue("backgroundColor", "transparent");
-    } else {
-      form.setValue("backgroundColor", "#ffffff"); // or any default
-    }
-  }}
-/>
-
+                    <Checkbox
+                      checked={form.watch("noBackground")}
+                      onCheckedChange={(checked: boolean) => {
+                        form.setValue("noBackground", checked);
+                        if (checked) {
+                          form.setValue("backgroundColor", "transparent");
+                        }
+                      }}
+                    />
                     <label className="text-sm">Transparent Background</label>
                   </div>
                 </div>

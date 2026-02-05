@@ -13,7 +13,7 @@ export function FormComponent({
   const element = elementInstance as CustomInstance;
   const {
     title,
-    backgroundColor = "transparent",
+    backgroundColor = "#ffffff",
     textColor = "#000000",
     textAlign = "left",
   } = element.extraAttributes;
@@ -43,7 +43,6 @@ export function FormComponent({
           color:
             isTransparent && isBlackText && !pdf ? undefined : textColor,
           textAlign,
-          fontSize: element.extraAttributes.fontSize ?? 24,
         }}
       >
         {title}

@@ -14,7 +14,7 @@ export function DesignerComponent({
   const element = elementInstance as CustomInstance;
   const {
     title,
-    backgroundColor = "transparent",
+    backgroundColor = "#ffffff",
     textColor = "#000000",
     textAlign = "left",
   } = element.extraAttributes;
@@ -41,7 +41,6 @@ export function DesignerComponent({
           backgroundColor: isTransparent ? undefined : backgroundColor,
           color: isTransparent && isBlackText ? undefined : textColor,
           textAlign,
-          fontSize: element.extraAttributes.fontSize ?? 24,
         }}
       >
         {title}
