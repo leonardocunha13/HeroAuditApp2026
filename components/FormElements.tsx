@@ -84,6 +84,7 @@ interface TextFieldExtraAttributes {
   width?: number;
   content?: string;
   headerRowIndexes?: number[];
+  fontSize?: number;
 }
 
 export type FormElementInstance = {

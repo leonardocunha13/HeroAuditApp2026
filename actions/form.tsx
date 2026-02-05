@@ -9,7 +9,9 @@ import {Client} from "../@types/types";
 
 
 Amplify.configure(outputs);
-const client = generateClient<Schema>();
+const client = generateClient<Schema>({
+  authMode: "apiKey", // matches your backend
+});
 export async function GetClients() {
   try {
     const allClients: Client[] = [];

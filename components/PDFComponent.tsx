@@ -609,6 +609,7 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
         backgroundColor = "#ffffff",
         textColor = "#000000",
         textAlign = "left",
+        fontSize = 14,
       } = element.extraAttributes ?? {};
 
       const isTransparent = backgroundColor === "transparent";
@@ -624,7 +625,7 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
         >
           <Text
             style={{
-              fontSize: 14,
+              fontSize,
               textAlign: textAlign as "left" | "center" | "right",
               color: textColor,
             }}
@@ -639,7 +640,14 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
     case "ParagraphField": {
       const { text } = element.extraAttributes ?? {};
       const html = typeof text === "string" ? text.trim() : "";
-
+      let textAlign: "left" | "center" | "right" = "left";
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+      const p = doc.querySelector("p");
+      if (p?.style.textAlign) {
+        const align = p.style.textAlign;
+        if (align === "center" || align === "right") textAlign = align as any;
+      }
       return (
         <View style={{ padding: 2, borderWidth: 1, borderRadius: 4 }}>
           <Text
@@ -647,6 +655,7 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
               fontSize: 10,
               lineHeight: 1.5,
               flexWrap: "wrap",
+              textAlign,
             }}
             wrap={false}
           >

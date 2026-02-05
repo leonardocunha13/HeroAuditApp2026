@@ -19,6 +19,7 @@ const extraAttributes = {
   textColor: "#000000",
   textAlign: "center" as "left" | "center" | "right",
   repeatOnPageBreak: false,
+  fontSize: 24,
 };
 
 export const propertiesSchema = z.object({
@@ -28,6 +29,7 @@ export const propertiesSchema = z.object({
   textAlign: z.enum(["left", "center", "right"]),
   noBackground: z.boolean().optional(),
   repeatOnPageBreak: z.boolean(),
+  fontSize: z.number().min(8).max(96).optional(),
 });
 
 export const TitleFieldFormElement: FormElement = {

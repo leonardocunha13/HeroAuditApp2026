@@ -237,7 +237,7 @@ export function FormComponent({
   return (
     <div>
       <p className="font-medium mb-2">{label}</p>
-      <Table className="max-w-[100%]">
+      <Table className="border-2 border-gray-700 border-collapse w-full">
         <TableHeader>
           <TableRow>
             {(() => {
@@ -259,7 +259,7 @@ export function FormComponent({
                   <TableHead
                     key={col}
                     colSpan={span}
-                    className="bg-gray-100 break-words text-left align-top"
+                    className="break-words text-left align-top border-2 border-gray-700 border-collapse w-full"
                     style={{
                       minWidth: "50px",
                       whiteSpace: "pre-wrap",
@@ -280,7 +280,7 @@ export function FormComponent({
           {Array.from({ length: rows }, (_, row) => (
             <TableRow
               key={row}
-              className={`whitespace-pre-wrap break-words ${headerRowIndexes.includes(row) ? "whitespace-pre-wrap break-words bg-gray-100 text-muted-foreground font-medium" : " whitespace-pre-wrap break-words"
+              className={`border-2 border-gray-700 border-collapse w-full whitespace-pre-wrap break-words ${headerRowIndexes.includes(row) ? "whitespace-pre-wrap break-words bg-gray-100 text-muted-foreground font-medium" : " whitespace-pre-wrap break-words"
                 }`}
             >
               {Array.from({ length: columns }, (_, col) => {
@@ -332,7 +332,7 @@ export function FormComponent({
                   }
                 }
                 return (
-                  <TableCell key={col} rowSpan={rowSpan} colSpan={colSpan} className="justify-center items-center table-cell-wrap break-words whitespace-normal">
+                  <TableCell key={col} rowSpan={rowSpan} colSpan={colSpan} className="border-2 border-gray-700 border-collapse w-full justify-center items-center table-cell-wrap break-words whitespace-normal">
                     {isCheckbox ? (
                       <div
                         onClick={() => {

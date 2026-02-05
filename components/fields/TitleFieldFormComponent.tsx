@@ -43,6 +43,7 @@ export function FormComponent({
           color:
             isTransparent && isBlackText && !pdf ? undefined : textColor,
           textAlign,
+          fontSize: element.extraAttributes.fontSize ?? 24,
         }}
       >
         {title}

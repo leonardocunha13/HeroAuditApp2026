@@ -11,6 +11,16 @@ export function DesignerComponent({ elementInstance }: { elementInstance: FormEl
   const element = elementInstance as CustomInstance;
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number>(0);
+  const [align, setAlign] = useState<'left' | 'center' | 'right'>('left');
+   useEffect(() => {
+    // Detect alignment from first paragraph
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(element.extraAttributes.text, 'text/html');
+    const p = doc.querySelector('p');
+    if (p?.style.textAlign) {
+      setAlign(p.style.textAlign as 'left' | 'center' | 'right');
+    }
+  }, [element.extraAttributes.text]);
 
   useEffect(() => {
     if (!contentRef.current) return;
@@ -29,11 +39,11 @@ export function DesignerComponent({ elementInstance }: { elementInstance: FormEl
     return () => observer.disconnect();
   }, [elementInstance]);
 
-  return (
+return (
     <div style={{ height: `${height}px` }}>
       <div
         ref={contentRef}
-        className="p-2 border rounded-md w-full text-sm break-words whitespace-pre-wrap min-h-[60px]"
+        className={`p-2 border rounded-md w-full text-sm break-words whitespace-pre-wrap min-h-[60px] ${align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : ''}`}
         dangerouslySetInnerHTML={{ __html: element.extraAttributes.text }}
       />
     </div>

@@ -52,6 +52,7 @@ export function PropertiesComponent({
         textColor,
         textAlign,
         repeatOnPageBreak,
+        fontSize: values.fontSize ?? 24,
       },
     });
   }
@@ -127,6 +128,29 @@ export function PropertiesComponent({
                   value={field.value || ""}
                   onChange={(color: string) => field.onChange(color)}
                 />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="fontSize"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Font Size (px)</FormLabel>
+              <FormControl>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={8}
+                    max={96}
+                    value={field.value || 24}
+                    onChange={(e) => form.setValue("fontSize", Number(e.target.value))}
+                    className="flex-1"
+                  />
+                  <span className="w-10 text-right">{field.value || 24}px</span>
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>

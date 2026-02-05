@@ -1,9 +1,9 @@
 {
   "auth": {
-    "user_pool_id": "ap-southeast-2_ZUyxMGb1K",
+    "user_pool_id": "ap-southeast-2_2Vd7NGEiG",
     "aws_region": "ap-southeast-2",
-    "user_pool_client_id": "4cc58faqk9ucliqupj31jo8fok",
-    "identity_pool_id": "ap-southeast-2:bbeb9bdd-a780-44ab-8f4c-aabcbaecb083",
+    "user_pool_client_id": "64536gakjf29e5inc17mkroc5j",
+    "identity_pool_id": "ap-southeast-2:13134169-6450-4a98-8e16-e1764522f530",
     "mfa_methods": [],
     "standard_required_attributes": [
       "email",
@@ -45,9 +45,9 @@
     "unauthenticated_identities_enabled": true
   },
   "data": {
-    "url": "https://mz4qkp62qjbuniz4l7a42e6cma.appsync-api.ap-southeast-2.amazonaws.com/graphql",
+    "url": "https://ylwv45dvgjd2bengjs7q3v2qn4.appsync-api.ap-southeast-2.amazonaws.com/graphql",
     "aws_region": "ap-southeast-2",
-    "api_key": "da2-v2gmyth4wfh5vpxhf52r72v3om",
+    "api_key": "da2-rfdxa3342fd2dfchfn4bykt2lq",
     "default_authorization_type": "API_KEY",
     "authorization_types": [
       "AMAZON_COGNITO_USER_POOLS",
@@ -949,11 +949,11 @@
   },
   "storage": {
     "aws_region": "ap-southeast-2",
-    "bucket_name": "amplify-amplifyvitereactt-heroauditappdrivebucketa-ktt9p4dti93x",
+    "bucket_name": "amplify-amplifyvitereactt-heroauditappdrivebucketa-qoakovg3qvau",
     "buckets": [
       {
         "name": "HeroAuditAppDrive",
-        "bucket_name": "amplify-amplifyvitereactt-heroauditappdrivebucketa-ktt9p4dti93x",
+        "bucket_name": "amplify-amplifyvitereactt-heroauditappdrivebucketa-qoakovg3qvau",
         "aws_region": "ap-southeast-2",
         "paths": {
           "public/uploads/*": {
