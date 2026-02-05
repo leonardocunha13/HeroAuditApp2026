@@ -41,6 +41,7 @@ export function DesignerComponent({
           backgroundColor: isTransparent ? undefined : backgroundColor,
           color: isTransparent && isBlackText ? undefined : textColor,
           textAlign,
+          fontSize: element.extraAttributes.fontSize ?? 24,
         }}
       >
         {title}
