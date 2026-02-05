@@ -2,6 +2,7 @@
 import { Document, Page, Text, View, StyleSheet, Image, Font } from "@react-pdf/renderer";
 import { FormElementInstance } from "./FormElements";
 import { renderHtmlToPDFElements } from "./converthtmlreact";
+import React from "react";
 
 Font.register({
   family: 'DejaVuSans',
@@ -818,15 +819,20 @@ export default function PDFDocument({ elements, responses, formName, revision, o
               const titleValue = responses[element.id];
               const nextValue = responses[nextElement.id];
 
-              const isBigContent = ["ParagraphField", "TableField", "ImageField"].includes(nextElement?.type);
               return (
-                <View key={`combo-${element.id}-${nextElement.id}`} wrap={!isBigContent} style={styles.fieldContainer}>
+                <React.Fragment key={`combo-${element.id}-${nextElement.id}`}>
+                  {/* Title (safe to keep together) */}
+                  <View key={`title-${element.id}`} style={styles.fieldContainer} wrap={false}>
+                    <Text style={styles.fieldTitle}>{element.extraAttributes?.label}</Text>
+                    {renderFieldValue(element, titleValue)}
+                  </View>
 
-                  <Text style={styles.fieldTitle}>{element.extraAttributes?.label}</Text>
-                  {renderFieldValue(element, titleValue)}
-                  <Text style={styles.fieldTitle}>{nextElement.extraAttributes?.label}</Text>
-                  {renderFieldValue(nextElement, nextValue)}
-                </View>
+                  {/* Content (MUST be allowed to wrap) */}
+                  <View key={`content-${nextElement.id}`} style={styles.fieldContainer}>
+                    <Text style={styles.fieldTitle}>{nextElement.extraAttributes?.label}</Text>
+                    {renderFieldValue(nextElement, nextValue)}
+                  </View>
+                </React.Fragment>
               );
             }
 

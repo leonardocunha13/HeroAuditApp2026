@@ -14,7 +14,7 @@ export function DesignerComponent({
   const element = elementInstance as CustomInstance;
   const {
     title,
-    backgroundColor = "#ffffff",
+    backgroundColor = "transparent",
     textColor = "#000000",
     textAlign = "left",
   } = element.extraAttributes;
