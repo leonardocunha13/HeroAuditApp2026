@@ -442,7 +442,10 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
 
                     let rightBorder = "1pt solid black";
                     if (isMergedRight(rawCellValue)) rightBorder = "1pt solid black";
-
+                    const isShortText =
+                      cleanedValue.length > 0 &&
+                      cleanedValue.length <= 3 &&
+                      isNaN(Number(cleanedValue));
                     const isEuropeanNumber =
                       /^[0-9]{1,3}(\.[0-9]{3})*,[0-9]+$/.test(cleanedValue) ||
                       /^[0-9]+,[0-9]+$/.test(cleanedValue) ||
@@ -464,8 +467,12 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
                       !isNaN(Number(cleanedValue)) ||
                       /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{1}$/.test(cleanedValue) ||
                       /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{2}$/.test(cleanedValue) ||
-                      /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{3}$/.test(cleanedValue);
-
+                      /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{3}$/.test(cleanedValue) ||
+                      isShortText ||
+                      /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValue) ||
+                      /^[0-9]+(,[0-9]+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValue) ||
+                      /^-?\d+(\.\d+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValue) ||
+                      /^-?\d+,\d+\s*[a-zA-Z]{1,3}$/.test(cleanedValue);
                     let bottomBorder = "1pt solid black";
                     if (isMergedDown(rawCellValue)) {
                       const span = getMergeDownSpan(rawCellValue);
@@ -474,7 +481,6 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
                         bottomBorder = "none";
                       }
                     }
-
                     cells.push(
                       <View
                         key={`cell-${rowIndex}-${colIndex}`}
