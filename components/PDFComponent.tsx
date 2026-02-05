@@ -653,7 +653,8 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
       const p = doc.querySelector("p");
       if (p?.style.textAlign) {
         const align = p.style.textAlign;
-        if (align === "center" || align === "right") textAlign = align as any;
+        if (align === "center") textAlign = "center";
+        else if (align === "right") textAlign = "right";
       }
       return (
         <View style={{ padding: 2, borderWidth: 1, borderRadius: 4 }}>
