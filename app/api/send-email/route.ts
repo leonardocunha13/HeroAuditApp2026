@@ -6,6 +6,11 @@ const sesClient = new SESClient({
 });
 
 export async function POST(req: Request) {
+    console.log("Amplify SES Client running. Process.env:", {
+  AWS_REGION: process.env.AWS_REGION,
+  AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+});
+
   try {
     const { toEmails, subject, body } = await req.json();
 
