@@ -58,7 +58,18 @@ function FormLinkShare({ shareUrl }: { shareUrl: string }) {
     setSelectedUsers((prev) => prev.filter((u) => u !== email));
   };
 
-  const handleShare = () => {
+const handleShare = async () => {
+  try {
+    await fetch("/api/send-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        toEmails: selectedUsers,
+        subject: "Form Shared with You",
+        body: `<p>You have been invited to fill the form: <a href="${value}">${value}</a></p>`,
+      }),
+    });
+
     toast({
       title: "Link shared!",
       description: `Shared with: ${selectedUsers.join(", ")}`,
@@ -66,7 +77,17 @@ function FormLinkShare({ shareUrl }: { shareUrl: string }) {
     setOpen(false);
     setSelectedUsers([]);
     setInputValue("");
-  };
+  } catch (err) {
+    toast({
+      title: "Error",
+      description: "Failed to send email",
+      variant: "destructive",
+    });
+    console.error(err);
+  }
+};
+
+
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
