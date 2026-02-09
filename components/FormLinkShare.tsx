@@ -88,14 +88,17 @@ const handleShare = async () => {
     setOpen(false);
     setSelectedUsers([]);
     setInputValue("");
-  } catch (err: any) {
-    toast({
-      title: "Error",
-      description: err.message || "Failed to send email",
-      variant: "destructive",
-    });
-    console.error("Send email error:", err);
-  }
+  } catch (err: unknown) {
+  const message =
+    err instanceof Error ? err.message : "Failed to send email";
+
+  toast({
+    title: "Error",
+    description: message,
+    variant: "destructive",
+  });
+  console.error("Send email error:", err);
+}
 };
 
   return (
