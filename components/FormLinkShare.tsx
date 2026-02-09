@@ -58,44 +58,45 @@ function FormLinkShare({ shareUrl }: { shareUrl: string }) {
     setSelectedUsers((prev) => prev.filter((u) => u !== email));
   };
 
-  const handleShare = async () => {
-    try {
-      const res = await fetch(
-        "https://p3bobv2zxft32b7wxdse5ma33u0vduup.lambda-url.ap-southeast-2.on.aws/",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            toEmails: selectedUsers,
-            subject: "Form Shared with You",
-            body: `<p>You have been invited to fill the form: <a href="${value}">${value}</a></p>`,
-          }),
-        }
-      );
+const LAMBDA_URL = "https://p3bobv2zxft32b7wxdse5ma33u0vduup.lambda-url.ap-southeast-2.on.aws/";
 
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.details || "Email send failed");
-      }
+const handleShare = async () => {
+  try {
+    if (selectedUsers.length === 0) return;
 
-      toast({
-        title: "Link shared!",
-        description: `Shared with: ${selectedUsers.join(", ")}`,
-      });
-      setOpen(false);
-      setSelectedUsers([]);
-      setInputValue("");
-    } catch (err) {
-      toast({
-        title: "Error",
-        description: "Failed to send email",
-        variant: "destructive",
-      });
-      console.error(err);
+    const res = await fetch(LAMBDA_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        toEmails: selectedUsers, // array of emails
+        subject: "Form Shared with You",
+        body: `<p>You have been invited to fill the form: <a href="${window.location.origin}${shareUrl.replace("/submit/", "/forms/")}">${shareUrl}</a></p>`,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data?.details || "Failed to send email");
     }
-  };
 
+    toast({
+      title: "Link shared!",
+      description: `Shared with: ${selectedUsers.join(", ")}`,
+    });
 
+    setOpen(false);
+    setSelectedUsers([]);
+    setInputValue("");
+  } catch (err: any) {
+    toast({
+      title: "Error",
+      description: err.message || "Failed to send email",
+      variant: "destructive",
+    });
+    console.error("Send email error:", err);
+  }
+};
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
