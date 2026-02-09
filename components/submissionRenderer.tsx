@@ -122,66 +122,68 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     setSelectedUsers((prev) => prev.filter((e) => e !== email));
   };
 
-const handleSharePDF = async () => {
-  setPdfLoading(true);
-  try {
-    const resolvedGroups = await prepareResolvedElements(pageGroups);
+  const handleSharePDF = async () => {
+    setPdfLoading(true);
+    try {
+      const resolvedGroups = await prepareResolvedElements(pageGroups);
 
-    const blob = await pdf(
-      <PDFDocument
-        elements={resolvedGroups}
-        responses={responses}
-        formName={formName}
-        revision={revision}
-        orientation={orientation}
-        pageSize={pageSize}
-        docNumber={docNumber}
-        docNumberRevision={docNumberRevision}
-        equipmentName={equipmentName}
-        equipmentTag={equipmentTag}
-      />
-    ).toBlob();
+      const blob = await pdf(
+        <PDFDocument
+          elements={resolvedGroups}
+          responses={responses}
+          formName={formName}
+          revision={revision}
+          orientation={orientation}
+          pageSize={pageSize}
+          docNumber={docNumber}
+          docNumberRevision={docNumberRevision}
+          equipmentName={equipmentName}
+          equipmentTag={equipmentTag}
+        />
+      ).toBlob();
 
-    const arrayBuffer = await blob.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    let binary = "";
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
+      const arrayBuffer = await blob.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64PDF = btoa(binary);
+
+      await fetch("https://p3bobv2zxft32b7wxdse5ma33u0vduup.lambda-url.ap-southeast-2.on.aws/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toEmails: selectedUsers,
+          subject: `Form PDF: ${formName} REV.${revision}`,
+          equipmentName,
+          equipmentTag,
+          body: `<p>Please find the attached PDF.</p>`,
+          attachment: {
+            filename: `${formName}_REV${revision}.pdf`,
+            content: base64PDF,
+          },
+        }),
+      });
+
+      toast({
+        title: "PDF sent!",
+        description: `PDF emailed successfully to: ${selectedUsers.join(", ")}`,
+      });
+      setOpen(false);
+      setSelectedUsers([]);
+      setInputValue("");
+    } catch (err) {
+      console.error("Send PDF error:", err);
+      toast({
+        title: "Error",
+        description: "Failed to send PDF",
+        variant: "destructive",
+      });
+    } finally {
+      setPdfLoading(false);
     }
-    const base64PDF = btoa(binary);
-
-    await fetch("https://p3bobv2zxft32b7wxdse5ma33u0vduup.lambda-url.ap-southeast-2.on.aws/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        toEmails: selectedUsers,
-        subject: `Form PDF: ${formName} REV.${revision}`,
-        body: `<p>Please find the attached PDF.</p>`,
-        attachment: {
-          filename: `${formName}_REV${revision}.pdf`,
-          content: base64PDF,
-        },
-      }),
-    });
-
-    toast({
-      title: "PDF sent!",
-      description: `PDF emailed successfully to: ${selectedUsers.join(", ")}`,
-    });
-    setOpen(false);
-    setSelectedUsers([]);
-    setInputValue("");
-  } catch (err) {
-    console.error("Send PDF error:", err);
-    toast({
-      title: "Error",
-      description: "Failed to send PDF",
-      variant: "destructive",
-    });
-  } finally {
-    setPdfLoading(false);
-  }
-};
+  };
 
   return (
     <div className="flex flex-col items-center w-full h-full">

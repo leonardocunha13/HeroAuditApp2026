@@ -70,7 +70,9 @@ function FormLinkShare({ shareUrl }: { shareUrl: string }) {
         body: JSON.stringify({
           toEmails: selectedUsers, // array of emails
           subject: "Form Shared with You",
-          body: `<p>You have been invited to fill the form: <a href="${window.location.origin}${shareUrl.replace("/submit/", "/forms/")}">${shareUrl}</a></p>`,
+          body: `<p>Hello,</p>
+             <p>Please find the link to access all of the reports: <a href="${window.location.origin}${shareUrl.replace("/submit/", "/forms/")}">${shareUrl}</a></p>
+             <p>Best regards,<br/>Hero Engineering Team</p>`,
         }),
       });
 
