@@ -58,50 +58,63 @@ function FormLinkShare({ shareUrl }: { shareUrl: string }) {
     setSelectedUsers((prev) => prev.filter((u) => u !== email));
   };
 
-  const LAMBDA_URL = "https://p3bobv2zxft32b7wxdse5ma33u0vduup.lambda-url.ap-southeast-2.on.aws/";
+  const LAMBDA_URL =
+  "https://p3bobv2zxft32b7wxdse5ma33u0vduup.lambda-url.ap-southeast-2.on.aws/";
 
-  const handleShare = async () => {
-    try {
-      if (selectedUsers.length === 0) return;
-
-      const res = await fetch(LAMBDA_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          toEmails: selectedUsers, // array of emails
-          subject: "Form Shared with You",
-          body: `<p>Hello,</p>
-             <p>Please find the link to access all of the reports: <a href="${window.location.origin}${shareUrl.replace("/submit/", "/forms/")}">View Reports</a></p>
-             <p>Best regards,<br/>Hero Engineering Team</p>`,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.details || "Failed to send email");
-      }
-
+const handleShare = async () => {
+  try {
+    if (!selectedUsers.length) {
       toast({
-        title: "Link shared!",
-        description: `Shared with: ${selectedUsers.join(", ")}`,
-      });
-
-      setOpen(false);
-      setSelectedUsers([]);
-      setInputValue("");
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Failed to send email";
-
-      toast({
-        title: "Error",
-        description: message,
+        title: "Select at least one user",
         variant: "destructive",
       });
-      console.error("Send email error:", err);
+      return;
     }
-  };
+
+    const res = await fetch(LAMBDA_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        toEmails: selectedUsers, // array of emails
+        subject: "Form Shared with You",
+        body: `<p>Hello,</p>
+               <p>Please find the link to access all of the reports: 
+               <a href="${window.location.origin}${shareUrl.replace(
+                 "/submit/",
+                 "/forms/"
+               )}">View Reports</a></p>
+               <p>Best regards,<br/>Hero Engineering Team</p>`,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data?.error || "Failed to send email");
+    }
+
+    toast({
+      title: "Link shared!",
+      description: `Shared with: ${selectedUsers.join(", ")}`,
+    });
+
+    // Reset state
+    setOpen(false);
+    setSelectedUsers([]);
+    setInputValue("");
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to send email";
+
+    toast({
+      title: "Error",
+      description: message,
+      variant: "destructive",
+    });
+
+    console.error("Send email error:", err);
+  }
+};
+
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
