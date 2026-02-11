@@ -13,6 +13,7 @@ import { Label, Input } from "@aws-amplify/ui-react";
 import { X } from "lucide-react";
 import { ImShare } from "react-icons/im";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+
 interface Props {
   elements: FormElementInstance[];
   responses: { [key: string]: unknown };
@@ -23,6 +24,8 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
   const [formName, setFormName] = useState<string>("Loading...");
   const [equipmentName, setEquipmentName] = useState<string>("Loading...");
   const [equipmentTag, setEquipmentTag] = useState<string>("Loading...");
+  const [projectName, setProjectName] = useState<string>("Loading...");
+  const [clientName, setClientName] = useState<string>("Loading...");
   const [revision, setRevision] = useState<number | string>("Loading...");
   const [docNumber, setDocNumber] = useState<string>("Loading...");
   const [docNumberRevision, setDocNumberRevision] = useState<number | string>("Loading...");
@@ -41,6 +44,8 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
         setDocNumberRevision(result.docNumberRevision || "0");
         setEquipmentName(result.equipmentName || "Untitled Equipment");
         setEquipmentTag(result.equipmentTag || "Untitled Tag");
+        setProjectName(result.projectName || "Untitled Project");
+        setClientName(result.clientName || "Untitled Client");
       } catch {
         setFormName("Unknown");
       }
@@ -155,10 +160,27 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           toEmails: selectedUsers,
-          subject: `Form PDF: ${formName} REV.${revision}`,
+          subject: `Issued Document ${docNumber} | Revision ${docNumberRevision}`,
           equipmentName,
           equipmentTag,
-          body: `<p>Please find the attached PDF.</p>`,
+          body: `
+              <p>Hello, ${clientName}</p>
+              <p>
+                Please find attached the PDF generated from the submitted form for the ${projectName}.
+              </p>
+              <p>
+                <strong>Form:</strong> ${formName} Rev. ${revision}<br/> 
+                <strong>Document number:</strong> ${docNumber} Rev. ${docNumberRevision}<br/>
+                <strong>Equipment:</strong> ${equipmentName} (${equipmentTag})
+              </p>
+              <p>
+                If you have any questions or need further information, feel free to reach out.
+              </p>
+              <p>
+                Kind regards,<br/>
+                Hero Engineering Team
+              </p>
+            `,
           attachment: {
             filename: `${formName}_REV${revision}.pdf`,
             content: base64PDF,
@@ -226,7 +248,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
               </Button>
               <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
-                  <Button className="w-[140px] md:w-[200px] text-sm md:text-md mt-2 gap-2">
+                  <Button className="w-full">
                     <ImShare className="mr-2 h-4 w-4" />
                     Share PDF
                   </Button>

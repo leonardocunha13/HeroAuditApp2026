@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ImShare } from "react-icons/im";
@@ -17,32 +17,11 @@ import {
 import { Label } from "./ui/label";
 import { X } from "lucide-react";
 
-type User = { email: string; name: string };
-
 function FormLinkShare({ shareUrl }: { shareUrl: string }) {
-  const [mounted, setMounted] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-
-    const fetchUsers = async () => {
-      try {
-        const res = await fetch("/api/list-users");
-        const data = await res.json();
-        setUsers(data.users || []);
-      } catch (err) {
-        console.error("Error fetching users:", err);
-      }
-    };
-
-    fetchUsers();
-  }, []);
-
-  if (!mounted) return null;
+  const [loading, setLoading] = useState(false);
 
   const value = `${window.location.origin}${shareUrl.replace("/submit/", "/forms/")}`;
 
@@ -59,62 +38,70 @@ function FormLinkShare({ shareUrl }: { shareUrl: string }) {
   };
 
   const LAMBDA_URL =
-  "https://p3bobv2zxft32b7wxdse5ma33u0vduup.lambda-url.ap-southeast-2.on.aws/";
+    "https://p3bobv2zxft32b7wxdse5ma33u0vduup.lambda-url.ap-southeast-2.on.aws/";
 
-const handleShare = async () => {
-  try {
-    if (!selectedUsers.length) {
-      toast({
-        title: "Select at least one user",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const res = await fetch(LAMBDA_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        toEmails: selectedUsers, // array of emails
-        subject: "Form Shared with You",
-        body: `<p>Hello,</p>
+  const handleShare = async () => {
+    try {
+      if (!selectedUsers.length) {
+        toast({
+          title: "Select at least one user",
+          variant: "destructive",
+        });
+        return;
+      }
+      setLoading(true);
+      const res = await fetch(LAMBDA_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toEmails: selectedUsers, // array of emails
+          subject: "Form Shared with You",
+          body: `
+          <p>Hello,</p>
                <p>Please find the link to access all of the reports: 
                <a href="${window.location.origin}${shareUrl.replace(
-                 "/submit/",
-                 "/forms/"
-               )}">View Reports</a></p>
-               <p>Best regards,<br/>Hero Engineering Team</p>`,
-      }),
-    });
+            "/submit/",
+            "/forms/"
+          )}">View Reports</a></p>
+              <p>
+                If you have any questions or need further information, feel free to reach out.
+              </p>
+              <p>
+                Kind regards,<br/>
+                Hero Engineering Team
+              </p>
+            `,
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (!res.ok) {
-      throw new Error(data?.error || "Failed to send email");
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to send email");
+      }
+
+      toast({
+        title: "Link shared!",
+        description: `Shared with: ${selectedUsers.join(", ")}`,
+      });
+
+      // Reset state
+      setOpen(false);
+      setSelectedUsers([]);
+      setInputValue("");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to send email";
+
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+      console.error("Send email error:", err);
+    } finally {
+      setLoading(false);
     }
-
-    toast({
-      title: "Link shared!",
-      description: `Shared with: ${selectedUsers.join(", ")}`,
-    });
-
-    // Reset state
-    setOpen(false);
-    setSelectedUsers([]);
-    setInputValue("");
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to send email";
-
-    toast({
-      title: "Error",
-      description: message,
-      variant: "destructive",
-    });
-
-    console.error("Send email error:", err);
-  }
-};
-
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -150,13 +137,6 @@ const handleShare = async () => {
                 Add
               </Button>
             </div>
-            <datalist id="user-suggestions">
-              {users.map((user) => (
-                <option key={user.email} value={user.email}>
-                  {user.name}
-                </option>
-              ))}
-            </datalist>
           </div>
 
           {selectedUsers.length > 0 && (
@@ -198,8 +178,12 @@ const handleShare = async () => {
         </div>
 
         <DialogFooter>
-          <Button onClick={handleShare} disabled={selectedUsers.length === 0} className="w-[250px] flex center">
-            Share
+          <Button
+            onClick={handleShare}
+            disabled={selectedUsers.length === 0 || loading}
+            className="w-[250px] flex center"
+          >
+            {loading ? "Sending..." : "Share"}
           </Button>
         </DialogFooter>
         <DialogTitle className="sr-only">

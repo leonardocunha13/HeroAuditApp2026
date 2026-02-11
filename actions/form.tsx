@@ -1296,6 +1296,7 @@ export async function getContentByFormIDandTagID(
 
 export async function GetFormNameFromSubmissionId(FormSubmissionsId: string) {
   try {
+    // 1. Find FormTag by submission ID
     const { data: formTags, errors } = await client.models.FormTag.list({
       filter: { contentTest: { eq: FormSubmissionsId } },
     });
@@ -1305,14 +1306,13 @@ export async function GetFormNameFromSubmissionId(FormSubmissionsId: string) {
     }
 
     const formTag = formTags[0];
-    const formId = formTag.formID;
-    const docNumber = formTag.docNumber;
-    const docNumberRevision = formTag.docNumberRevision;
-    const tagID = formTag.tagID;
+    const { formID, docNumber, docNumberRevision, tagID } = formTag;
 
-    const { data: submission, errors: submissionErrors } = await client.models.FormSubmissions.get({
-      id: FormSubmissionsId,
-    });
+    // 2. Get submission (for revision)
+    const { data: submission, errors: submissionErrors } =
+      await client.models.FormSubmissions.get({
+        id: FormSubmissionsId,
+      });
 
     if (submissionErrors || !submission) {
       throw new Error("Submission not found.");
@@ -1320,8 +1320,9 @@ export async function GetFormNameFromSubmissionId(FormSubmissionsId: string) {
 
     const formRevision = submission.formRevision ?? 0;
 
+    // 3. Get Form
     const { data: forms, errors: formErrors } = await client.models.Form.list({
-      filter: { id: { eq: formId ?? undefined } },
+      filter: { id: { eq: formID ?? undefined } },
     });
 
     if (formErrors || forms.length === 0) {
@@ -1332,15 +1333,46 @@ export async function GetFormNameFromSubmissionId(FormSubmissionsId: string) {
     const formName = form.name ?? null;
     const equipmentName = form.equipmentName ?? null;
 
-    let equipmentTag: string | null = null;
-    if (tagID) {
-      const { data: equipmentTagData, errors: equipmentTagErrors } = await client.models.EquipmentTag.get({
-        id: tagID,
+    // 4. Get Client
+    let clientName: string | null = null;
+
+    if (form.clientID) {
+      const { data: clientData } = await client.models.Client.get({
+        id: form.clientID,
       });
 
-      if (!equipmentTagErrors && equipmentTagData?.Tag) {
-        equipmentTag = equipmentTagData.Tag;
+      clientName = clientData?.ClientName ?? null;
+    }
+
+    // 5. Get Project (via FormProject)
+    let projectName: string | null = null;
+
+    const { data: formProjects } = await client.models.FormProject.list({
+      filter: { formID: { eq: formID ?? undefined } },
+    });
+
+    if (formProjects.length > 0) {
+      const projectID = formProjects[0].projectID;
+
+      if (projectID) {
+        const { data: projectData } = await client.models.Project.get({
+          id: projectID,
+        });
+
+        projectName = projectData?.projectName ?? null;
       }
+    }
+
+    // 6. Get EquipmentTag
+    let equipmentTag: string | null = null;
+
+    if (tagID) {
+      const { data: equipmentTagData } =
+        await client.models.EquipmentTag.get({
+          id: tagID,
+        });
+
+      equipmentTag = equipmentTagData?.Tag ?? null;
     }
 
     return {
@@ -1350,12 +1382,15 @@ export async function GetFormNameFromSubmissionId(FormSubmissionsId: string) {
       docNumberRevision,
       equipmentTag,
       equipmentName,
+      projectName,
+      clientName,
     };
   } catch (error) {
     console.error("Error:", error);
     throw error;
   }
 }
+
 
 export async function GetFormsContent(FormSubmissionsId: string) {
 
