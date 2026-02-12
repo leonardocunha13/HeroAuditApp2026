@@ -13,6 +13,8 @@ import { Label, Input } from "@aws-amplify/ui-react";
 import { X } from "lucide-react";
 import { ImShare } from "react-icons/im";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import PreviewFirstPage from "./PreviewFirstPage";
+import { StampBase64 } from "./StampImage";
 
 interface Props {
   elements: FormElementInstance[];
@@ -33,7 +35,16 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
   const [orientation, setOrientation] = useState<"portrait" | "landscape">("portrait");
   const [pageSize, setPageSize] = useState<"A4" | "A3">("A4");
   const [loading, setLoading] = useState(false);
-
+  const [includeStamp, setIncludeStamp] = useState(false);
+  const [stampData, setStampData] = useState({
+    issuedDate: "",
+    to: "",
+    status: "", // APPROVED / RESUBMIT etc
+    x: 10,      // left offset in PDF units
+    y: 10,      // top offset
+    width: 200,
+    height: 100,
+  });
   useEffect(() => {
     const fetchFormName = async () => {
       try {
@@ -95,6 +106,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
         docNumberRevision={docNumberRevision}
         equipmentName={equipmentName}
         equipmentTag={equipmentTag}
+        stamp={includeStamp ? stampData : undefined}
       />
     ).toBlob();
 
@@ -108,7 +120,15 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
   };
 
   const [pdfLoading, setPdfLoading] = useState(false);
-
+  const PDFPreviewURL = PreviewFirstPage({
+    elements,
+    formName,
+    revision,
+    pageSize,
+    orientation,
+    responses,
+    /*stamp: includeStamp ? stampData : undefined,*/
+  });
   const [open, setOpen] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState<string>("");
@@ -144,6 +164,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
           docNumberRevision={docNumberRevision}
           equipmentName={equipmentName}
           equipmentTag={equipmentTag}
+          stamp={includeStamp ? stampData : undefined}
         />
       ).toBlob();
 
@@ -206,6 +227,40 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
       setPdfLoading(false);
     }
   };
+  /*const handleDownloadPDF = async () => {
+    setLoading(true);
+    try {
+      const resolvedGroups = await prepareResolvedElements(pageGroups);
+
+      const blob = await pdf(
+        <PDFDocument
+          elements={resolvedGroups}
+          responses={responses}
+          formName={formName}
+          revision={revision}
+          orientation={orientation}
+          pageSize={pageSize}
+          docNumber={docNumber}
+          docNumberRevision={docNumberRevision}
+          equipmentName={equipmentName}
+          equipmentTag={equipmentTag}
+          stamp={includeStamp ? stampData : undefined}
+        />
+      ).toBlob();
+
+      // download
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const fileName = `${formName}_REV${revision}_${docNumber}_REV${docNumberRevision}.pdf`;
+      link.download = fileName;
+      link.click();
+    } catch (err) {
+      console.error("PDF generation error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };*/
 
   return (
     <div className="flex flex-col items-center w-full h-full">
@@ -254,11 +309,22 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                   </Button>
                 </DialogTrigger>
 
-                <DialogContent className="w-[700px] bg-white dark:bg-neutral-900 text-black dark:text-white shadow-xl">
+                <DialogContent
+                  style={{
+                    width: includeStamp ? '95vw' : 400,
+                    maxWidth: '95vw',
+                    height: includeStamp ? 700 : 250,
+                    top: includeStamp ? '3%' : '30%',
+                    transform: 'translateX(-50%)',
+                  }}
+                  className="bg-white dark:bg-neutral-900 text-black dark:text-white 
+             shadow-xl border border-gray-300 dark:border-neutral-700 
+             rounded-lg transition-all duration-300 fixed left-1/2 
+             -translate-x-1/2"
+                >
                   <DialogHeader>
                     <DialogTitle>Share PDF</DialogTitle>
                   </DialogHeader>
-
                   <div className="space-y-4">
                     <div>
                       <Label>Add people</Label>
@@ -306,14 +372,124 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                         </div>
                       </div>
                     )}
+                    <div className="border rounded-lg p-4 space-y-3">
+                      <Label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={includeStamp}
+                          onChange={(e) => setIncludeStamp(e.target.checked)}
+                        />
+                        Include Client Stamp
+                      </Label>
+                      <Button
+                        className="w-full mt-2"
+                        onClick={handleSharePDF}
+                        disabled={pdfLoading || selectedUsers.length === 0}
+                      >
+                        {pdfLoading ? "Sending..." : "Send PDF via Email"}
+                      </Button>
+                      {includeStamp && (
+                        <div className="flex gap-4 mt-3">
+                          {/* Left: Form controls */}
+                          <div className="flex-1 space-y-3 overflow-y-auto max-h-[600px]">
+                            <div>
+                              <Label>Issued Date</Label>
+                              <Input
+                                type="date"
+                                value={stampData.issuedDate}
+                                onChange={(e) =>
+                                  setStampData({ ...stampData, issuedDate: e.target.value })
+                                }
+                              />
+                            </div>
+                            <div>
+                              <Label>Issued To</Label>
+                              <Input
+                                value={stampData.to}
+                                onChange={(e) =>
+                                  setStampData({ ...stampData, to: e.target.value })
+                                }
+                              />
+                            </div>
+                            <div>
+                              <Label>Status</Label>
+                              <div className="flex flex-col gap-2 mt-2">
+                                {[
+                                  "REVISE & RESUBMIT",
+                                  "APPROVED - EXCEPT AS NOTED",
+                                  "APPROVED WITHOUT EXCEPTION",
+                                ].map((status) => (
+                                  <label key={status} className="flex items-center gap-2">
+                                    <input
+                                      type="radio"
+                                      name="stampStatus"
+                                      checked={stampData.status === status}
+                                      onChange={() =>
+                                        setStampData({ ...stampData, status })
+                                      }
+                                    />
+                                    <span>{status}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
 
-                    <Button
-                      className="w-full mt-2"
-                      onClick={handleSharePDF}
-                      disabled={pdfLoading || selectedUsers.length === 0}
-                    >
-                      {pdfLoading ? "Sending..." : "Send PDF via Email"}
-                    </Button>
+                          </div>
+
+                          {/* Right: PDF Preview with draggable stamp */}
+                          {PDFPreviewURL && (
+                            <div className="flex-1 relative w-[400px] h-[600px] border">
+                              <iframe src={PDFPreviewURL} className="w-full h-full" />
+
+                              <div
+                                className="absolute cursor-move"
+                                style={{
+                                  top: stampData.y,
+                                  left: stampData.x,
+                                  width: stampData.width,
+                                  height: stampData.height,
+                                }}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  const startX = e.clientX;
+                                  const startY = e.clientY;
+                                  const startLeft = stampData.x;
+                                  const startTop = stampData.y;
+
+                                  const handleMouseMove = (moveEvent: MouseEvent) => {
+                                    const deltaX = moveEvent.clientX - startX;
+                                    const deltaY = moveEvent.clientY - startY;
+
+                                    setStampData((prev) => ({
+                                      ...prev,
+                                      x: startLeft + deltaX,
+                                      y: startTop + deltaY,
+                                    }));
+                                  };
+
+                                  const handleMouseUp = () => {
+                                    window.removeEventListener("mousemove", handleMouseMove);
+                                    window.removeEventListener("mouseup", handleMouseUp);
+                                  };
+
+                                  window.addEventListener("mousemove", handleMouseMove);
+                                  window.addEventListener("mouseup", handleMouseUp);
+                                }}
+                              >
+                                <img src={StampBase64} className="w-full h-full object-contain" />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+
+
+                      {/*<Button onClick={handleDownloadPDF} disabled={loading}>
+                        {loading ? "Generating..." : "Download PDF for Test"}
+                      </Button>*/}
+
+                    </div>
                   </div>
                 </DialogContent>
               </Dialog>
