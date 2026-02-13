@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FormElementInstance } from "./FormElements";
 import { Button } from "./ui/button";
 import { GetFormNameFromSubmissionId } from "../actions/form";
@@ -14,6 +14,10 @@ import { X } from "lucide-react";
 import { ImShare } from "react-icons/im";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 
+const PDF_SIZES = {
+  A4: { portrait: { w: 700, h: 842 }, landscape: { w: 700, h: 842 } },
+  A3: { portrait: { w: 602, h: 1191 }, landscape: { w: 1291, h: 602 } },
+};
 interface Props {
   elements: FormElementInstance[];
   responses: { [key: string]: unknown };
@@ -33,7 +37,27 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
   const [orientation, setOrientation] = useState<"portrait" | "landscape">("portrait");
   const [pageSize, setPageSize] = useState<"A4" | "A3">("A4");
   const [loading, setLoading] = useState(false);
-
+  const [open, setOpen] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [inputValue, setInputValue] = useState<string>("");
+  const [users] = useState<{ email: string; name: string }[]>([]);
+  const [includeStamp, setIncludeStamp] = useState(false);
+  const viewerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [PDFPreviewURL, setPDFPreviewURL] = useState<string | null>(null);
+  const [stampData, setStampData] = useState({
+    issuedDate: "",
+    signedDate: "",
+    reviewer: "",
+    reviewerRole: "",
+    status: "", // APPROVED / RESUBMIT etc
+    signed: "",
+    x: 10,      // left offset in PDF units
+    y: 10,      // top offset
+    width: 200,
+    height: 100,
+  });
   useEffect(() => {
     const fetchFormName = async () => {
       try {
@@ -80,6 +104,96 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     setPageGroups(groups);
   }, [elements]);
 
+  useEffect(() => {
+    const calculateScale = () => {
+      if (!viewerRef.current) return;
+
+const container = viewerRef.current.parentElement;
+if (!container) return;
+
+const rect = container.getBoundingClientRect();
+const pdfSize = PDF_SIZES[pageSize][orientation];
+
+// SCALE ONLY BY WIDTH
+const scaleX = rect.width / pdfSize.w;
+
+// Optional: prevent zoom-in
+setScale(Math.min(scaleX, 1));
+    };
+
+    calculateScale();
+    window.addEventListener("resize", calculateScale);
+    return () => window.removeEventListener("resize", calculateScale);
+  }, [pageSize, orientation, includeStamp]);
+
+  // ...all your other useEffects and functions above
+
+  const formattedDate =
+    stampData.issuedDate
+      ? new Date(stampData.issuedDate)
+        .toLocaleDateString("en-GB") // "en-GB" gives DD/MM/YYYY
+        .replace(/\//g, "-")          // convert slashes to dashes
+      : "";
+
+  // PDF preview effect
+  useEffect(() => {
+    if (!includeStamp || pageGroups.length === 0) {
+      setPDFPreviewURL(null);
+      return;
+    }
+
+    const generatePreview = async () => {
+      try {
+
+        const firstPageGroup = pageGroups.length > 0 ? [pageGroups[0]] : [];
+        const blob = await pdf(
+          <PDFDocument
+            elements={await prepareResolvedElements(firstPageGroup)}
+            responses={responses}
+            formName={formName}
+            revision={revision}
+            orientation={orientation}
+            pageSize={pageSize}
+            docNumber={docNumber}
+            docNumberRevision={docNumberRevision}
+            equipmentName={equipmentName}
+            equipmentTag={equipmentTag}
+            stamp={includeStamp ? { ...stampData, issuedDate: formattedDate } : undefined}
+          />
+        ).toBlob();
+
+        const url = URL.createObjectURL(blob);
+        setPDFPreviewURL(url);
+      } catch (err) {
+        console.error("PDF preview generation error:", err);
+        setPDFPreviewURL(null);
+      }
+    };
+
+    generatePreview();
+
+    return () => {
+      // cleanup old blob URL
+      if (PDFPreviewURL) {
+        URL.revokeObjectURL(PDFPreviewURL);
+      }
+    };
+  }, [
+    includeStamp,
+    pageGroups,
+    responses,
+    stampData,
+    orientation,
+    pageSize,
+    formName,
+    revision,
+    docNumber,
+    docNumberRevision,
+    equipmentName,
+    equipmentTag,
+    formattedDate,
+  ]);
+
   const handleExportPDF = async () => {
     setLoading(true);
     const resolvedGroups = await prepareResolvedElements(pageGroups);
@@ -95,6 +209,11 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
         docNumberRevision={docNumberRevision}
         equipmentName={equipmentName}
         equipmentTag={equipmentTag}
+        stamp={
+          includeStamp
+            ? { ...stampData, issuedDate: formattedDate }
+            : undefined
+        }
       />
     ).toBlob();
 
@@ -106,13 +225,6 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     link.click();
     setLoading(false);
   };
-
-  const [pdfLoading, setPdfLoading] = useState(false);
-
-  const [open, setOpen] = useState(false);
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [inputValue, setInputValue] = useState<string>("");
-  const [users] = useState<{ email: string; name: string }[]>([]);
 
   const handleAddUser = () => {
     const value = inputValue.trim();
@@ -144,6 +256,11 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
           docNumberRevision={docNumberRevision}
           equipmentName={equipmentName}
           equipmentTag={equipmentTag}
+          stamp={
+            includeStamp
+              ? { ...stampData, issuedDate: formattedDate }
+              : undefined
+          }
         />
       ).toBlob();
 
@@ -206,6 +323,45 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
       setPdfLoading(false);
     }
   };
+  /*const handleDownloadPDF = async () => {
+    setLoading(true);
+    try {
+      const resolvedGroups = await prepareResolvedElements(pageGroups);
+
+      const blob = await pdf(
+        <PDFDocument
+          elements={resolvedGroups}
+          responses={responses}
+          formName={formName}
+          revision={revision}
+          orientation={orientation}
+          pageSize={pageSize}
+          docNumber={docNumber}
+          docNumberRevision={docNumberRevision}
+          equipmentName={equipmentName}
+          equipmentTag={equipmentTag}
+          stamp={
+            includeStamp
+              ? { ...stampData, issuedDate: formattedDate }
+              : undefined
+          }
+        />
+      ).toBlob();
+
+      // download
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const fileName = `${formName}_REV${revision}_${docNumber}_REV${docNumberRevision}.pdf`;
+      link.download = fileName;
+      link.click();
+    } catch (err) {
+      console.error("PDF generation error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };*/
+
 
   return (
     <div className="flex flex-col items-center w-full h-full">
@@ -248,54 +404,63 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
               </Button>
               <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
-                  <Button className="w-full">
-                    <ImShare className="mr-2 h-4 w-4" />
+                  <Button className="w-full flex items-center justify-center gap-2">
+                    <ImShare className="h-4 w-4" />
                     Share PDF
                   </Button>
                 </DialogTrigger>
 
-                <DialogContent className="w-[700px] bg-white dark:bg-neutral-900 text-black dark:text-white shadow-xl">
+                <DialogContent
+                  className="bg-white dark:bg-neutral-900 text-black dark:text-white
+         shadow-xl border border-gray-300 dark:border-neutral-700
+         rounded-lg fixed left-1/2 -translate-x-1/2 w-[95vw] max-w-[900px] max-h-[90vh]
+         overflow-hidden flex flex-col"
+                >
                   <DialogHeader>
                     <DialogTitle>Share PDF</DialogTitle>
                   </DialogHeader>
 
-                  <div className="space-y-4">
-                    <div>
-                      <Label>Add people</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          list="user-suggestions"
-                          placeholder="Enter email or name"
-                          value={inputValue}
-                          onChange={(e) => setInputValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              handleAddUser();
-                            }
-                          }}
-                        />
-                        <Button onClick={handleAddUser} disabled={!inputValue.trim()}>
-                          Add
-                        </Button>
+                  <div className="flex flex-col md:flex-row gap-6 overflow-hidden px-4 pb-4 h-full">
+                    {/* Left panel - fixed width */}
+                    <div className="flex flex-col gap-4 overflow-y-auto max-h-[80vh] w-[350px] flex-shrink-0">
+                      {/* Left panel content */}
+                      {/* Email input */}
+                      <div className="flex flex-col gap-2">
+                        <Label>Add recipients</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            list="user-suggestions"
+                            placeholder="Enter email"
+                            value={inputValue}
+                            onChange={(e) => setInputValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleAddUser();
+                              }
+                            }}
+                            className="flex-1"
+                          />
+                          <Button onClick={handleAddUser} disabled={!inputValue.trim()}>
+                            Add
+                          </Button>
+                        </div>
+                        <datalist id="user-suggestions">
+                          {users.map((user) => (
+                            <option key={user.email} value={user.email}>
+                              {user.name}
+                            </option>
+                          ))}
+                        </datalist>
                       </div>
-                      <datalist id="user-suggestions">
-                        {users.map((user) => (
-                          <option key={user.email} value={user.email}>
-                            {user.name}
-                          </option>
-                        ))}
-                      </datalist>
-                    </div>
 
-                    {selectedUsers.length > 0 && (
-                      <div>
-                        <Label>Selected:</Label>
-                        <div className="flex flex-wrap gap-2 mt-2">
+                      {/* Selected emails */}
+                      {selectedUsers.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
                           {selectedUsers.map((email) => (
                             <div
                               key={email}
-                              className="flex items-center gap-2 px-2 py-1 rounded bg-neutral-200 dark:bg-neutral-800 text-sm"
+                              className="flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-neutral-800 rounded-full text-sm"
                             >
                               {email}
                               <button onClick={() => handleRemoveUser(email)}>
@@ -304,16 +469,160 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                             </div>
                           ))}
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    <Button
-                      className="w-full mt-2"
-                      onClick={handleSharePDF}
-                      disabled={pdfLoading || selectedUsers.length === 0}
-                    >
-                      {pdfLoading ? "Sending..." : "Send PDF via Email"}
-                    </Button>
+                      {/* Stamp controls */}
+                      <div className="border-t pt-4 space-y-3">
+                        <Label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={includeStamp}
+                            onChange={(e) => {
+                              setIncludeStamp(e.target.checked);
+                              if (!e.target.checked) setPDFPreviewURL(null);
+                            }}
+                          />
+                          Include Client Stamp
+                        </Label>
+                        <Button
+                          className="mt-2 w-full"
+                          onClick={handleSharePDF}
+                          disabled={pdfLoading || selectedUsers.length === 0}
+                        >
+                          {pdfLoading ? "Sending..." : "Send PDF via Email"}
+                        </Button>
+                       {/* <Button onClick={handleDownloadPDF} disabled={loading}>
+                          {loading ? "Generating..." : "Download PDF for Test"}
+                        </Button>*/}
+
+                        {includeStamp && (
+                          <div className="flex flex-col gap-3 overflow-y-auto max-h-[40vh]">
+                            <div>
+                              <Label>Reviewed Date</Label>
+                              <Input
+                                type="date"
+                                value={stampData.issuedDate}
+                                onChange={(e) =>
+                                  setStampData({ ...stampData, issuedDate: e.target.value })
+                                }
+                              />
+                            </div>
+                            <div>
+                              <Label>Reviewer</Label>
+                              <Input
+                                value={stampData.reviewer}
+                                onChange={(e) =>
+                                  setStampData({ ...stampData, reviewer: e.target.value })
+                                }
+                              />
+                            </div>
+                            <div>
+                              <Label>Reviewer Role</Label>
+                              <Input
+                                value={stampData.reviewerRole}
+                                onChange={(e) =>
+                                  setStampData({ ...stampData, reviewerRole: e.target.value })
+                                }
+                              />
+                            </div>
+                            <div>
+                              <Label>Status</Label>
+                              <div className="flex flex-col gap-1 mt-1">
+                                {[
+                                  "REVISE - AS NOTED",
+                                  "APPROVED",
+                                ].map((status) => (
+                                  <label key={status} className="flex items-center gap-2">
+                                    <input
+                                      type="radio"
+                                      name="stampStatus"
+                                      checked={stampData.status === status}
+                                      onChange={() => setStampData({ ...stampData, status })}
+                                    />
+                                    <span>{status}</span>
+                                  </label>
+                                ))}
+                              </div>
+                              <div>
+                                <Label>Signed</Label>
+                                <Input
+                                  value={stampData.signed}
+                                  onChange={(e) =>
+                                    setStampData({ ...stampData, signed: e.target.value })
+                                  }
+                                />
+                              </div>
+                              <div>
+                                <Label>Date</Label>
+                                <Input
+                                  type="date"
+                                  value={stampData.signedDate}
+                                  onChange={(e) =>
+                                    setStampData({ ...stampData, signedDate: e.target.value })
+                                  }
+                                />
+                              </div>
+                            </div>
+                            <Label>Click on the PDF preview to place the stamp.</Label>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right panel: PDF preview only if stamp is included */}
+                    <div className="flex-1 min-w-0 overflow-auto">
+                      {includeStamp && pageGroups.length > 0 && PDFPreviewURL && (
+                        <div
+                          ref={viewerRef}
+                          className="relative border rounded-md  bg-gray-50 cursor-crosshair"
+                          style={{
+                            width: PDF_SIZES[pageSize][orientation].w * scale + "px",
+                            height: PDF_SIZES[pageSize][orientation].h * scale + "px",
+                          }}
+                        >
+                          {/* Iframe PDF - full scrollable content */}
+                          <iframe
+                            src={`${PDFPreviewURL}#toolbar=0&navpanes=0&scrollbar=0`}
+                            style={{ width: "100%", height: "100%", border: "none" }}
+                          />
+
+                          {/* Transparent overlay to capture clicks */}
+                          <div
+                            className="absolute top-0 left-0 w-full h-full"
+                            style={{ cursor: "crosshair" }}
+                            onClick={(e) => {
+                              if (!viewerRef.current) return;
+
+                              const rect = viewerRef.current.getBoundingClientRect();
+                              const scrollLeft = viewerRef.current.scrollLeft;
+                              const scrollTop = viewerRef.current.scrollTop;
+
+                              // click relative to PDF container including scroll
+                              const clickX = e.clientX - rect.left + scrollLeft;
+                              const clickY = e.clientY - rect.top + scrollTop;
+
+                              const pdfWidth = PDF_SIZES[pageSize][orientation].w;
+                              const pdfHeight = PDF_SIZES[pageSize][orientation].h;
+
+                              const scaleX = rect.width / pdfWidth;
+                              const scaleY = rect.height / pdfHeight;
+                              const scaleFactor = scale;
+
+                              const xPdf = clickX / scaleFactor - stampData.width / 2;
+                              const yPdf = clickY / scaleFactor - stampData.height / 2;
+
+                              console.log({ clickX, clickY, xPdf, yPdf, scaleFactor, rect, scrollLeft, scrollTop });
+
+                              setStampData({
+                                ...stampData,
+                                x: Math.min(pdfWidth - stampData.width, Math.max(0, xPdf)),
+                                y: Math.min(pdfHeight - stampData.height, Math.max(0, yPdf)),
+                              });
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </DialogContent>
               </Dialog>

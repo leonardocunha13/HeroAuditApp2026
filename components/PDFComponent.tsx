@@ -3,6 +3,7 @@ import { Document, Page, Text, View, StyleSheet, Image, Font } from "@react-pdf/
 import { FormElementInstance } from "./FormElements";
 import { renderHtmlToPDFElements } from "./converthtmlreact";
 import React from "react";
+const STAMP_SRC = "/Stamp.png";
 
 Font.register({
   family: 'DejaVuSans',
@@ -20,7 +21,20 @@ interface Props {
   docNumberRevision?: number | string;
   equipmentName?: string;
   equipmentTag?: string;
+  stamp?: {
+    x: number;
+    width: number;
+    height: number;
+    y: number;
+    issuedDate: string;
+    status: string;
+    signedDate: string;
+    signed: string;
+    reviewer: string;
+    reviewerRole: string;
+  };
 }
+
 const styles = StyleSheet.create({
   page: {
     wrap: true,
@@ -101,8 +115,43 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: 'grey',
   },
+
+  
+});
+const stylesStamp = StyleSheet.create({
+  stampWrapper: {
+    position: "relative",
+    width: 200,
+    height: 100,
+    marginTop: 20,
+    zIndex: 999,
+  },
+  stampImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+  },
+  stampText: {
+    position: "absolute",
+    fontSize: 10,
+    fontWeight: "bold",
+    color: "#000",
+  },
+  stampDate: {
+    top: 38.8,
+    left: 70,
+  },
+  stampTo: {
+    top: 48,
+    left: 45,
+  },
 });
 
+const statusPositions: Record<string, { top?: number; bottom?: number; left?: number; right?: number }> = {
+  "REVISE - AS NOTED": { top: 65, left: 42 },
+  "APPROVED": { top: 74.5, left: 42 },
+  "": {},
+};
 
 function renderFieldValue(element: FormElementInstance, value: unknown) {
 
@@ -751,7 +800,7 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
   }
 }
 
-export default function PDFDocument({ elements, responses, formName, revision, orientation, pageSize, docNumber, docNumberRevision, equipmentName, equipmentTag }: Props) {
+export default function PDFDocument({ elements, responses, formName, revision, orientation, pageSize, docNumber, docNumberRevision, equipmentName, equipmentTag, stamp }: Props) {
   const repeatablesInOrder = elements[0]?.filter(el => el.extraAttributes?.repeatOnPageBreak) || [];
   const repeatHeaderImage = repeatablesInOrder.find(el => el.type === "ImageField");
   const headerImagePosition = repeatHeaderImage?.extraAttributes?.position ?? "left";
@@ -792,6 +841,7 @@ export default function PDFDocument({ elements, responses, formName, revision, o
             })}
           </View>
           {/* Header */}
+
           <View fixed style={styles.headerContainer}>
             <View style={styles.headerContent}>
               <Text>{equipmentName} | {equipmentTag}</Text>
@@ -856,6 +906,30 @@ export default function PDFDocument({ elements, responses, formName, revision, o
               </View>
             );
           })}
+          {/* Stamp overlay: must come AFTER all content */}
+          {pageIndex === 0 && stamp && (
+            <View
+              style={{
+                position: "absolute",
+                top: stamp.y,   // from SubmissionRenderer
+                left: stamp.x,  // from SubmissionRenderer
+                width: stamp.width,
+                height: stamp.height,
+              }}
+              fixed
+            >
+              <Image src={STAMP_SRC} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 40, left: 75 }]}>{stamp.issuedDate}</Text>
+              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 48, left: 75 }]}>{stamp.reviewer}</Text>
+              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 56, left: 75 }]}>{stamp.reviewerRole}</Text>
+              <Text style={[stylesStamp.stampText, { fontSize: 6, fontWeight: "bold" }, statusPositions[stamp.status]]}>
+                X
+              </Text>
+              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 82.5, left: 75 }]}>{stamp.signed}</Text>
+              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 91, left: 75 }]}>{stamp.signedDate}</Text>
+            </View>
+          )}
+
         </Page>
       ))}
     </Document>
