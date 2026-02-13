@@ -108,17 +108,13 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     const calculateScale = () => {
       if (!viewerRef.current) return;
 
-const container = viewerRef.current.parentElement;
-if (!container) return;
+      const rect = viewerRef.current.parentElement!.getBoundingClientRect(); // use right panel width
+      const pdfSize = PDF_SIZES[pageSize][orientation];
 
-const rect = container.getBoundingClientRect();
-const pdfSize = PDF_SIZES[pageSize][orientation];
+      const scaleX = rect.width / pdfSize.w;
+      const scaleY = rect.height / pdfSize.h;
 
-// SCALE ONLY BY WIDTH
-const scaleX = rect.width / pdfSize.w;
-
-// Optional: prevent zoom-in
-setScale(Math.min(scaleX, 1));
+      setScale(Math.min(scaleX, scaleY, 1)); // don’t scale > 1
     };
 
     calculateScale();
@@ -605,7 +601,9 @@ setScale(Math.min(scaleX, 1));
                               const pdfWidth = PDF_SIZES[pageSize][orientation].w;
                               const pdfHeight = PDF_SIZES[pageSize][orientation].h;
 
-                              const scaleFactor = scale;
+                              const scaleX = rect.width / pdfWidth;
+                              const scaleY = rect.height / pdfHeight;
+                              const scaleFactor = Math.min(scaleX, scaleY);
 
                               const xPdf = clickX / scaleFactor - stampData.width / 2;
                               const yPdf = clickY / scaleFactor - stampData.height / 2;
