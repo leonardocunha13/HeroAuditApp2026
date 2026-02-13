@@ -130,6 +130,12 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
         .toLocaleDateString("en-GB") // "en-GB" gives DD/MM/YYYY
         .replace(/\//g, "-")          // convert slashes to dashes
       : "";
+  const formattedSignedDate =
+    stampData.signedDate
+      ? new Date(stampData.signedDate)
+        .toLocaleDateString("en-GB") // "en-GB" gives DD/MM/YYYY
+        .replace(/\//g, "-")          // convert slashes to dashes
+      : "";
 
   // PDF preview effect
   useEffect(() => {
@@ -154,7 +160,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
             docNumberRevision={docNumberRevision}
             equipmentName={equipmentName}
             equipmentTag={equipmentTag}
-            stamp={includeStamp ? { ...stampData, issuedDate: formattedDate } : undefined}
+            stamp={includeStamp ? { ...stampData, issuedDate: formattedDate, signedDate: formattedSignedDate } : undefined}
           />
         ).toBlob();
 
@@ -188,6 +194,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     equipmentName,
     equipmentTag,
     formattedDate,
+    formattedSignedDate,
   ]);
 
   const handleExportPDF = async () => {
@@ -207,7 +214,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
         equipmentTag={equipmentTag}
         stamp={
           includeStamp
-            ? { ...stampData, issuedDate: formattedDate }
+            ? { ...stampData, issuedDate: formattedDate, signedDate: formattedSignedDate }
             : undefined
         }
       />
@@ -254,7 +261,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
           equipmentTag={equipmentTag}
           stamp={
             includeStamp
-              ? { ...stampData, issuedDate: formattedDate }
+              ? { ...stampData, issuedDate: formattedDate, signedDate: formattedSignedDate }
               : undefined
           }
         />
