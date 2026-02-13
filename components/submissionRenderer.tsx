@@ -192,6 +192,7 @@ setScale(Math.min(scaleX, 1));
     equipmentName,
     equipmentTag,
     formattedDate,
+    PDFPreviewURL
   ]);
 
   const handleExportPDF = async () => {
@@ -604,8 +605,6 @@ setScale(Math.min(scaleX, 1));
                               const pdfWidth = PDF_SIZES[pageSize][orientation].w;
                               const pdfHeight = PDF_SIZES[pageSize][orientation].h;
 
-                              const scaleX = rect.width / pdfWidth;
-                              const scaleY = rect.height / pdfHeight;
                               const scaleFactor = scale;
 
                               const xPdf = clickX / scaleFactor - stampData.width / 2;
