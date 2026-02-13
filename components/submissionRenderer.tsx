@@ -188,7 +188,6 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     equipmentName,
     equipmentTag,
     formattedDate,
-    PDFPreviewURL
   ]);
 
   const handleExportPDF = async () => {
