@@ -121,77 +121,17 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     return () => window.removeEventListener("resize", calculateScale);
   }, [pageSize, orientation, includeStamp]);
 
-  // ...all your other useEffects and functions above
 
   const formattedDate =
     stampData.issuedDate
       ? new Date(stampData.issuedDate)
-        .toLocaleDateString("en-GB") // "en-GB" gives DD/MM/YYYY
-        .replace(/\//g, "-")          // convert slashes to dashes
+        .toLocaleDateString("en-GB")
       : "";
   const formattedSignedDate =
     stampData.signedDate
       ? new Date(stampData.signedDate)
-        .toLocaleDateString("en-GB") // "en-GB" gives DD/MM/YYYY
-        .replace(/\//g, "-")          // convert slashes to dashes
+        .toLocaleDateString("en-GB")
       : "";
-
-  // PDF preview effect
-  /* useEffect(() => {
-     if (!includeStamp || pageGroups.length === 0) {
-       setPDFPreviewURL(null);
-       return;
-     }
- 
-     const generatePreview = async () => {
-       try {
- 
-         const firstPageGroup = pageGroups.length > 0 ? [pageGroups[0]] : [];
-         const blob = await pdf(
-           <PDFDocument
-             elements={await prepareResolvedElements(firstPageGroup)}
-             responses={responses}
-             formName={formName}
-             revision={revision}
-             orientation={orientation}
-             pageSize={pageSize}
-             docNumber={docNumber}
-             docNumberRevision={docNumberRevision}
-             equipmentName={equipmentName}
-             equipmentTag={equipmentTag}
-             stamp={includeStamp ? { ...stampData, issuedDate: formattedDate, signedDate: formattedSignedDate } : undefined}
-           />
-         ).toBlob();
- 
-         const reader = new FileReader();
- 
-         reader.onloadend = () => {
-           setPDFPreviewURL(reader.result as string);
-         };
- 
-         reader.readAsDataURL(blob);
-       } catch (err) {
-         console.error("PDF preview generation error:", err);
-         setPDFPreviewURL(null);
-       }
-     };
-     generatePreview();
-   }, [
-     includeStamp,
-     pageGroups,
-     responses,
-     stampData,
-     orientation,
-     pageSize,
-     formName,
-     revision,
-     docNumber,
-     docNumberRevision,
-     equipmentName,
-     equipmentTag,
-     formattedDate,
-     formattedSignedDate,
-   ]);*/
 
   interface PDFImagePreviewProps {
     firstPageGroup: FormElementInstance[][];
@@ -219,67 +159,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     includeStamp: boolean;
   }
 
- const PDFImagePreview = ({
-  firstPageGroup,
-  responses,
-  formName,
-  revision,
-  orientation,
-  pageSize,
-  docNumber,
-  docNumberRevision,
-  equipmentName,
-  equipmentTag,
-  stamp,
-  includeStamp,
-}: PDFImagePreviewProps) => {
-  const [pdfURL, setPdfURL] = useState<string | null>(null);
-
-  useEffect(() => {
-    const generatePDF = async () => {
-      const safeStamp = stamp
-        ? {
-            issuedDate: stamp.issuedDate || "",
-            signedDate: stamp.signedDate || "",
-            reviewer: stamp.reviewer || "",
-            reviewerRole: stamp.reviewerRole || "",
-            status: stamp.status || "",
-            signed: stamp.signed || "",
-            x: stamp.x ?? 10,
-            y: stamp.y ?? 10,
-            width: stamp.width ?? 200,
-            height: stamp.height ?? 100,
-          }
-        : undefined;
-
-      try {
-        const resolvedElements = await prepareResolvedElements(firstPageGroup);
-        const blob = await pdf(
-          <PDFDocument
-            elements={resolvedElements}
-            responses={responses}
-            formName={formName}
-            revision={revision}
-            orientation={orientation}
-            pageSize={pageSize}
-            docNumber={docNumber}
-            docNumberRevision={docNumberRevision}
-            equipmentName={equipmentName}
-            equipmentTag={equipmentTag}
-            stamp={includeStamp ? safeStamp : undefined}
-          />
-        ).toBlob();
-
-        const url = URL.createObjectURL(blob);
-        setPdfURL(url);
-      } catch (err) {
-        console.error("PDF generation error:", err);
-        setPdfURL(null);
-      }
-    };
-
-    if (firstPageGroup.length > 0) generatePDF();
-  }, [
+  const PDFImagePreview = ({
     firstPageGroup,
     responses,
     formName,
@@ -292,37 +172,89 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     equipmentTag,
     stamp,
     includeStamp,
-  ]);
+  }: PDFImagePreviewProps) => {
+    const [pdfURL, setPdfURL] = useState<string | null>(null);
 
-  if (!pdfURL) return <div>Loading PDF preview...</div>;
+    useEffect(() => {
+      const generatePDF = async () => {
+        const safeStamp = stamp
+          ? {
+            issuedDate: stamp.issuedDate || "",
+            signedDate: stamp.signedDate || "",
+            reviewer: stamp.reviewer || "",
+            reviewerRole: stamp.reviewerRole || "",
+            status: stamp.status || "",
+            signed: stamp.signed || "",
+            x: stamp.x ?? 10,
+            y: stamp.y ?? 10,
+            width: stamp.width ?? 200,
+            height: stamp.height ?? 100,
+          }
+          : undefined;
 
-  return (
-    <div style={{ width: "100%", height: "100%", border: "1px solid #ccc" }}>
-      <object
-        data={pdfURL}
-        type="application/pdf"
-        width="100%"
-        height="100%"
-      >
-        <iframe
-          src={pdfURL}
+        try {
+          const resolvedElements = await prepareResolvedElements(firstPageGroup);
+          const blob = await pdf(
+            <PDFDocument
+              elements={resolvedElements}
+              responses={responses}
+              formName={formName}
+              revision={revision}
+              orientation={orientation}
+              pageSize={pageSize}
+              docNumber={docNumber}
+              docNumberRevision={docNumberRevision}
+              equipmentName={equipmentName}
+              equipmentTag={equipmentTag}
+              stamp={includeStamp ? safeStamp : undefined}
+            />
+          ).toBlob();
+
+          const url = URL.createObjectURL(blob);
+          setPdfURL(url);
+        } catch (err) {
+          console.error("PDF generation error:", err);
+          setPdfURL(null);
+        }
+      };
+
+      if (firstPageGroup.length > 0) generatePDF();
+    }, [
+      firstPageGroup,
+      responses,
+      formName,
+      revision,
+      orientation,
+      pageSize,
+      docNumber,
+      docNumberRevision,
+      equipmentName,
+      equipmentTag,
+      stamp,
+      includeStamp,
+    ]);
+
+    if (!pdfURL) return <div>Loading PDF preview...</div>;
+
+    return (
+      <div style={{ width: "100%", height: "100%", border: "1px solid #ccc" }}>
+        <object
+          data={pdfURL}
+          type="application/pdf"
           width="100%"
           height="100%"
-          style={{ border: "none" }}
         >
-          <p>
-            PDF preview is not available on this device.{" "}
-            <a href={pdfURL} target="_blank" rel="noopener noreferrer">
-              Download PDF
-            </a>
-          </p>
-        </iframe>
-      </object>
-    </div>
-  );
-};
-
-
+          <iframe
+            src={pdfURL}
+            width="100%"
+            height="100%"
+            style={{ border: "none" }}
+          >
+          </iframe>
+        </object>
+      </div>
+    );
+  };
 
   const handleExportPDF = async () => {
     setLoading(true);
@@ -453,45 +385,6 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
       setPdfLoading(false);
     }
   };
-  /*const handleDownloadPDF = async () => {
-    setLoading(true);
-    try {
-      const resolvedGroups = await prepareResolvedElements(pageGroups);
-
-      const blob = await pdf(
-        <PDFDocument
-          elements={resolvedGroups}
-          responses={responses}
-          formName={formName}
-          revision={revision}
-          orientation={orientation}
-          pageSize={pageSize}
-          docNumber={docNumber}
-          docNumberRevision={docNumberRevision}
-          equipmentName={equipmentName}
-          equipmentTag={equipmentTag}
-          stamp={
-            includeStamp
-              ? { ...stampData, issuedDate: formattedDate }
-              : undefined
-          }
-        />
-      ).toBlob();
-
-      // download
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      const fileName = `${formName}_REV${revision}_${docNumber}_REV${docNumberRevision}.pdf`;
-      link.download = fileName;
-      link.click();
-    } catch (err) {
-      console.error("PDF generation error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };*/
-
 
   return (
     <div className="flex flex-col items-center w-full h-full">
@@ -620,9 +513,6 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                         >
                           {pdfLoading ? "Sending..." : "Send PDF via Email"}
                         </Button>
-                        {/* <Button onClick={handleDownloadPDF} disabled={loading}>
-                          {loading ? "Generating..." : "Download PDF for Test"}
-                        </Button>*/}
 
                         {includeStamp && (
                           <div className="flex flex-col gap-3 overflow-y-auto max-h-[40vh]">
@@ -709,8 +599,6 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                             height: PDF_SIZES[pageSize][orientation].h * scale + "px",
                           }}
                         >
-                          {/* Iframe PDF - full scrollable content */}
-
                           <PDFImagePreview
                             firstPageGroup={[pageGroups[0]]}
                             responses={responses}
@@ -725,8 +613,6 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                             includeStamp={includeStamp}
                             stamp={includeStamp ? { ...stampData, issuedDate: formattedDate, signedDate: formattedSignedDate } : undefined}
                           />
-
-
                           {/* Transparent overlay to capture clicks */}
                           <div
                             className="absolute top-0 left-0 w-full h-full"
