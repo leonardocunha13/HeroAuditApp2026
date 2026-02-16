@@ -219,7 +219,67 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     includeStamp: boolean;
   }
 
-  const PDFImagePreview = ({
+ const PDFImagePreview = ({
+  firstPageGroup,
+  responses,
+  formName,
+  revision,
+  orientation,
+  pageSize,
+  docNumber,
+  docNumberRevision,
+  equipmentName,
+  equipmentTag,
+  stamp,
+  includeStamp,
+}: PDFImagePreviewProps) => {
+  const [pdfURL, setPdfURL] = useState<string | null>(null);
+
+  useEffect(() => {
+    const generatePDF = async () => {
+      const safeStamp = stamp
+        ? {
+            issuedDate: stamp.issuedDate || "",
+            signedDate: stamp.signedDate || "",
+            reviewer: stamp.reviewer || "",
+            reviewerRole: stamp.reviewerRole || "",
+            status: stamp.status || "",
+            signed: stamp.signed || "",
+            x: stamp.x ?? 10,
+            y: stamp.y ?? 10,
+            width: stamp.width ?? 200,
+            height: stamp.height ?? 100,
+          }
+        : undefined;
+
+      try {
+        const resolvedElements = await prepareResolvedElements(firstPageGroup);
+        const blob = await pdf(
+          <PDFDocument
+            elements={resolvedElements}
+            responses={responses}
+            formName={formName}
+            revision={revision}
+            orientation={orientation}
+            pageSize={pageSize}
+            docNumber={docNumber}
+            docNumberRevision={docNumberRevision}
+            equipmentName={equipmentName}
+            equipmentTag={equipmentTag}
+            stamp={includeStamp ? safeStamp : undefined}
+          />
+        ).toBlob();
+
+        const url = URL.createObjectURL(blob);
+        setPdfURL(url);
+      } catch (err) {
+        console.error("PDF generation error:", err);
+        setPdfURL(null);
+      }
+    };
+
+    if (firstPageGroup.length > 0) generatePDF();
+  }, [
     firstPageGroup,
     responses,
     formName,
@@ -232,95 +292,35 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     equipmentTag,
     stamp,
     includeStamp,
-  }: PDFImagePreviewProps) => {
-    const [imgURL, setImgURL] = useState<string | null>(null);
+  ]);
 
-    useEffect(() => {
-      const generateImage = async () => {
-        console.log("Generating PDF preview with:", {
-          firstPageGroup,
-          responses,
-          formName,
-          revision,
-          orientation,
-          pageSize,
-          docNumber,
-          docNumberRevision,
-          equipmentName,
-          equipmentTag,
-          stamp,
-        });
-        const safeStamp = stamp
-          ? {
-            issuedDate: stamp.issuedDate || "",
-            signedDate: stamp.signedDate || "",
-            reviewer: stamp.reviewer || "",
-            reviewerRole: stamp.reviewerRole || "",
-            status: stamp.status || "",
-            signed: stamp.signed || "",
-            x: stamp.x ?? 10,
-            y: stamp.y ?? 10,
-            width: stamp.width ?? 200,
-            height: stamp.height ?? 100,
-          }
-          : undefined;
-        try {
-          const blob = await pdf(
-            <PDFDocument
-              elements={await prepareResolvedElements(firstPageGroup)}
-              responses={responses}
-              formName={formName}
-              revision={revision}
-              orientation={orientation}
-              pageSize={pageSize}
-              docNumber={docNumber}
-              docNumberRevision={docNumberRevision}
-              equipmentName={equipmentName}
-              equipmentTag={equipmentTag}
-              stamp={includeStamp ? safeStamp : undefined}
-            />
-          ).toBlob();
+  if (!pdfURL) return <div>Loading PDF preview...</div>;
 
-          const reader = new FileReader();
-          reader.onloadend = () => setImgURL(reader.result as string);
-          reader.readAsDataURL(blob);
-          console.log("Blob size:", blob?.size, blob?.type);
-          console.log("PDF preview generated", { stamp, docNumberRevision, revision });
-        } catch (err) {
-          console.error("PDF preview generation error:", err);
-          setImgURL(null);
-        }
-      };
-
-      if (firstPageGroup.length > 0) generateImage();
-    }, [
-      firstPageGroup,
-      responses,
-      formName,
-      revision,
-      orientation,
-      pageSize,
-      docNumber,
-      docNumberRevision,
-      equipmentName,
-      equipmentTag,
-      stamp,
-      includeStamp,
-    ]);
-
-    if (!imgURL) return <div>Loading preview...</div>;
-
-    return (
+  return (
+    <div style={{ width: "100%", height: "100%", border: "1px solid #ccc" }}>
       <object
-        data={imgURL}
+        data={pdfURL}
         type="application/pdf"
         width="100%"
         height="100%"
       >
-        PDF preview not available
+        <iframe
+          src={pdfURL}
+          width="100%"
+          height="100%"
+          style={{ border: "none" }}
+        >
+          <p>
+            PDF preview is not available on this device.{" "}
+            <a href={pdfURL} target="_blank" rel="noopener noreferrer">
+              Download PDF
+            </a>
+          </p>
+        </iframe>
       </object>
-    );
-  };
+    </div>
+  );
+};
 
 
 
