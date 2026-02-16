@@ -138,16 +138,104 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
       : "";
 
   // PDF preview effect
-  useEffect(() => {
-    if (!includeStamp || pageGroups.length === 0) {
-      setPDFPreviewURL(null);
-      return;
-    }
+  /* useEffect(() => {
+     if (!includeStamp || pageGroups.length === 0) {
+       setPDFPreviewURL(null);
+       return;
+     }
+ 
+     const generatePreview = async () => {
+       try {
+ 
+         const firstPageGroup = pageGroups.length > 0 ? [pageGroups[0]] : [];
+         const blob = await pdf(
+           <PDFDocument
+             elements={await prepareResolvedElements(firstPageGroup)}
+             responses={responses}
+             formName={formName}
+             revision={revision}
+             orientation={orientation}
+             pageSize={pageSize}
+             docNumber={docNumber}
+             docNumberRevision={docNumberRevision}
+             equipmentName={equipmentName}
+             equipmentTag={equipmentTag}
+             stamp={includeStamp ? { ...stampData, issuedDate: formattedDate, signedDate: formattedSignedDate } : undefined}
+           />
+         ).toBlob();
+ 
+         const reader = new FileReader();
+ 
+         reader.onloadend = () => {
+           setPDFPreviewURL(reader.result as string);
+         };
+ 
+         reader.readAsDataURL(blob);
+       } catch (err) {
+         console.error("PDF preview generation error:", err);
+         setPDFPreviewURL(null);
+       }
+     };
+     generatePreview();
+   }, [
+     includeStamp,
+     pageGroups,
+     responses,
+     stampData,
+     orientation,
+     pageSize,
+     formName,
+     revision,
+     docNumber,
+     docNumberRevision,
+     equipmentName,
+     equipmentTag,
+     formattedDate,
+     formattedSignedDate,
+   ]);*/
 
-    const generatePreview = async () => {
-      try {
+  interface PDFImagePreviewProps {
+    firstPageGroup: FormElementInstance[][];
+    responses: { [key: string]: unknown };
+    formName: string;
+    revision: string | number;
+    orientation: "portrait" | "landscape";
+    pageSize: "A4" | "A3";
+    docNumber: string;
+    docNumberRevision: string;
+    equipmentName: string;
+    equipmentTag: string;
+    stamp?: {
+      issuedDate: string;
+      signedDate: string;
+      reviewer?: string;
+      reviewerRole?: string;
+      status?: string;
+      signed?: string;
+      x?: number;
+      y?: number;
+      width?: number;
+      height?: number;
+    };
+  }
 
-        const firstPageGroup = pageGroups.length > 0 ? [pageGroups[0]] : [];
+  const PDFImagePreview = ({
+    firstPageGroup,
+    responses,
+    formName,
+    revision,
+    orientation,
+    pageSize,
+    docNumber,
+    docNumberRevision,
+    equipmentName,
+    equipmentTag,
+    stamp,
+  }: PDFImagePreviewProps) => {
+    const [imgURL, setImgURL] = useState<string | null>(null);
+
+    useEffect(() => {
+      const generateImage = async () => {
         const blob = await pdf(
           <PDFDocument
             elements={await prepareResolvedElements(firstPageGroup)}
@@ -160,39 +248,49 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
             docNumberRevision={docNumberRevision}
             equipmentName={equipmentName}
             equipmentTag={equipmentTag}
-            stamp={includeStamp ? { ...stampData, issuedDate: formattedDate, signedDate: formattedSignedDate } : undefined}
+            stamp={
+              includeStamp
+                ? {
+                  issuedDate: formattedDate || "",
+                  signedDate: formattedSignedDate || "",
+                  reviewer: stampData.reviewer || "",
+                  reviewerRole: stampData.reviewerRole || "",
+                  status: stampData.status || "",
+                  signed: stampData.signed || "",
+                  x: stampData.x ?? 10,
+                  y: stampData.y ?? 10,
+                  width: stampData.width ?? 200,
+                  height: stampData.height ?? 100,
+                }
+                : undefined
+            }
           />
         ).toBlob();
 
         const reader = new FileReader();
-
-        reader.onloadend = () => {
-          setPDFPreviewURL(reader.result as string);
-        };
-
+        reader.onloadend = () => setImgURL(reader.result as string);
         reader.readAsDataURL(blob);
-      } catch (err) {
-        console.error("PDF preview generation error:", err);
-        setPDFPreviewURL(null);
-      }
-    };
-    generatePreview();
-  }, [
-    includeStamp,
-    pageGroups,
-    responses,
-    stampData,
-    orientation,
-    pageSize,
-    formName,
-    revision,
-    docNumber,
-    docNumberRevision,
-    equipmentName,
-    equipmentTag,
-    formattedDate,
-    formattedSignedDate,
-  ]);
+      };
+
+      generateImage();
+    }, [
+      firstPageGroup,
+      responses,
+      formName,
+      revision,
+      orientation,
+      pageSize,
+      docNumber,
+      docNumberRevision,
+      equipmentName,
+      equipmentTag,
+      stamp,
+    ]);
+
+    if (!imgURL) return <div>Loading preview...</div>;
+    return <img src={imgURL} style={{ width: "100%" }} />;
+  };
+
 
   const handleExportPDF = async () => {
     setLoading(true);
@@ -581,10 +679,25 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                           }}
                         >
                           {/* Iframe PDF - full scrollable content */}
-                          <iframe
-                            src={`${PDFPreviewURL}#toolbar=0&navpanes=0&scrollbar=0`}
-                            style={{ width: "100%", height: "100%", border: "none" }}
-                          />
+                          {includeStamp && pageGroups.length > 0 && (
+                            <PDFImagePreview
+                              firstPageGroup={[pageGroups[0]]}
+                              responses={responses}
+                              formName={formName}
+                              revision={revision}
+                              orientation={orientation}
+                              pageSize={pageSize}
+                              docNumber={docNumber}
+                              docNumberRevision={String(docNumberRevision)}
+                              equipmentName={equipmentName}
+                              equipmentTag={equipmentTag}
+                              stamp={
+                                includeStamp
+                                  ? { ...stampData, issuedDate: formattedDate, signedDate: formattedSignedDate }
+                                  : undefined
+                              }
+                            />
+                          )}
 
                           {/* Transparent overlay to capture clicks */}
                           <div
