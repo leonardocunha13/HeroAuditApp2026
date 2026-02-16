@@ -164,22 +164,19 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
           />
         ).toBlob();
 
-        const url = URL.createObjectURL(blob);
-        setPDFPreviewURL(url);
+        const reader = new FileReader();
+
+        reader.onloadend = () => {
+          setPDFPreviewURL(reader.result as string);
+        };
+
+        reader.readAsDataURL(blob);
       } catch (err) {
         console.error("PDF preview generation error:", err);
         setPDFPreviewURL(null);
       }
     };
-
     generatePreview();
-
-    return () => {
-      // cleanup old blob URL
-      if (PDFPreviewURL) {
-        URL.revokeObjectURL(PDFPreviewURL);
-      }
-    };
   }, [
     includeStamp,
     pageGroups,
@@ -494,7 +491,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                         >
                           {pdfLoading ? "Sending..." : "Send PDF via Email"}
                         </Button>
-                       {/* <Button onClick={handleDownloadPDF} disabled={loading}>
+                        {/* <Button onClick={handleDownloadPDF} disabled={loading}>
                           {loading ? "Generating..." : "Download PDF for Test"}
                         </Button>*/}
 
