@@ -217,6 +217,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
       width?: number;
       height?: number;
     };
+    includeStamp: boolean;
   }
 
   const PDFImagePreview = ({
@@ -231,44 +232,68 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     equipmentName,
     equipmentTag,
     stamp,
+    includeStamp,
   }: PDFImagePreviewProps) => {
     const [imgURL, setImgURL] = useState<string | null>(null);
 
     useEffect(() => {
       const generateImage = async () => {
-        const blob = await pdf(
-          <PDFDocument
-            elements={await prepareResolvedElements(firstPageGroup)}
-            responses={responses}
-            formName={formName}
-            revision={revision}
-            orientation={orientation}
-            pageSize={pageSize}
-            docNumber={docNumber}
-            docNumberRevision={docNumberRevision}
-            equipmentName={equipmentName}
-            equipmentTag={equipmentTag}
-            stamp={includeStamp ? {
-              issuedDate: formattedDate || "",
-              signedDate: formattedSignedDate || "",
-              reviewer: stampData.reviewer || "",
-              reviewerRole: stampData.reviewerRole || "",
-              status: stampData.status || "",
-              signed: stampData.signed || "",
-              x: stampData.x ?? 10,
-              y: stampData.y ?? 10,
-              width: stampData.width ?? 200,
-              height: stampData.height ?? 100
-            } : undefined}
-          />
-        ).toBlob();
+        console.log("Generating PDF preview with:", {
+      firstPageGroup,
+      responses,
+      formName,
+      revision,
+      orientation,
+      pageSize,
+      docNumber,
+      docNumberRevision,
+      equipmentName,
+      equipmentTag,
+      stamp,
+    });
+        const safeStamp = stamp
+          ? {
+            issuedDate: stamp.issuedDate || "",
+            signedDate: stamp.signedDate || "",
+            reviewer: stamp.reviewer || "",
+            reviewerRole: stamp.reviewerRole || "",
+            status: stamp.status || "",
+            signed: stamp.signed || "",
+            x: stamp.x ?? 10,
+            y: stamp.y ?? 10,
+            width: stamp.width ?? 200,
+            height: stamp.height ?? 100,
+          }
+          : undefined;
+        try {
+          const blob = await pdf(
+            <PDFDocument
+              elements={await prepareResolvedElements(firstPageGroup)}
+              responses={responses}
+              formName={formName}
+              revision={revision}
+              orientation={orientation}
+              pageSize={pageSize}
+              docNumber={docNumber}
+              docNumberRevision={docNumberRevision}
+              equipmentName={equipmentName}
+              equipmentTag={equipmentTag}
+              stamp={includeStamp ? safeStamp : undefined}
+            />
+          ).toBlob();
 
-        const reader = new FileReader();
-        reader.onloadend = () => setImgURL(reader.result as string);
-        reader.readAsDataURL(blob);
+          const reader = new FileReader();
+          reader.onloadend = () => setImgURL(reader.result as string);
+          reader.readAsDataURL(blob);
+
+          console.log("PDF preview generated", { stamp, docNumberRevision, revision });
+        } catch (err) {
+          console.error("PDF preview generation error:", err);
+          setImgURL(null);
+        }
       };
 
-      generateImage();
+      if (firstPageGroup.length > 0) generateImage();
     }, [
       firstPageGroup,
       responses,
@@ -281,11 +306,13 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
       equipmentName,
       equipmentTag,
       stamp,
+      includeStamp,
     ]);
 
     if (!imgURL) return <div>Loading preview...</div>;
     return <img src={imgURL} style={{ width: "100%" }} />;
   };
+
 
 
   const handleExportPDF = async () => {
@@ -665,7 +692,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
 
                     {/* Right panel: PDF preview only if stamp is included */}
                     <div className="flex-1 min-w-0 overflow-auto">
-                      {includeStamp && pageGroups.length > 0 && PDFPreviewURL && (
+                      {includeStamp && pageGroups.length > 0 && (
                         <div
                           ref={viewerRef}
                           className="relative border rounded-md  bg-gray-50 cursor-crosshair"
@@ -675,21 +702,22 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                           }}
                         >
                           {/* Iframe PDF - full scrollable content */}
-                          {pageGroups.length > 0 && PDFPreviewURL && (
-                            <PDFImagePreview
-                              firstPageGroup={[pageGroups[0]]}
-                              responses={responses}
-                              formName={formName}
-                              revision={revision}
-                              orientation={orientation}
-                              pageSize={pageSize}
-                              docNumber={docNumber}
-                              docNumberRevision={String(docNumberRevision)}
-                              equipmentName={equipmentName}
-                              equipmentTag={equipmentTag}
-                              stamp={includeStamp ? { ...stampData, issuedDate: formattedDate, signedDate: formattedSignedDate } : undefined}
-                            />
-                          )}
+
+                          <PDFImagePreview
+                            firstPageGroup={[pageGroups[0]]}
+                            responses={responses}
+                            formName={formName}
+                            revision={revision}
+                            orientation={orientation}
+                            pageSize={pageSize}
+                            docNumber={docNumber}
+                            docNumberRevision={String(docNumberRevision)}
+                            equipmentName={equipmentName}
+                            equipmentTag={equipmentTag}
+                            includeStamp={includeStamp}
+                            stamp={includeStamp ? { ...stampData, issuedDate: formattedDate, signedDate: formattedSignedDate } : undefined}
+                          />
+
 
                           {/* Transparent overlay to capture clicks */}
                           <div
