@@ -202,7 +202,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     orientation: "portrait" | "landscape";
     pageSize: "A4" | "A3";
     docNumber: string;
-    docNumberRevision: string;
+    docNumberRevision: string | number;
     equipmentName: string;
     equipmentTag: string;
     stamp?: {
@@ -248,22 +248,18 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
             docNumberRevision={docNumberRevision}
             equipmentName={equipmentName}
             equipmentTag={equipmentTag}
-            stamp={
-              includeStamp
-                ? {
-                  issuedDate: formattedDate || "",
-                  signedDate: formattedSignedDate || "",
-                  reviewer: stampData.reviewer || "",
-                  reviewerRole: stampData.reviewerRole || "",
-                  status: stampData.status || "",
-                  signed: stampData.signed || "",
-                  x: stampData.x ?? 10,
-                  y: stampData.y ?? 10,
-                  width: stampData.width ?? 200,
-                  height: stampData.height ?? 100,
-                }
-                : undefined
-            }
+            stamp={includeStamp ? {
+              issuedDate: formattedDate || "",
+              signedDate: formattedSignedDate || "",
+              reviewer: stampData.reviewer || "",
+              reviewerRole: stampData.reviewerRole || "",
+              status: stampData.status || "",
+              signed: stampData.signed || "",
+              x: stampData.x ?? 10,
+              y: stampData.y ?? 10,
+              width: stampData.width ?? 200,
+              height: stampData.height ?? 100
+            } : undefined}
           />
         ).toBlob();
 
@@ -679,7 +675,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                           }}
                         >
                           {/* Iframe PDF - full scrollable content */}
-                          {includeStamp && pageGroups.length > 0 && (
+                          {pageGroups.length > 0 && PDFPreviewURL && (
                             <PDFImagePreview
                               firstPageGroup={[pageGroups[0]]}
                               responses={responses}
@@ -691,11 +687,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                               docNumberRevision={String(docNumberRevision)}
                               equipmentName={equipmentName}
                               equipmentTag={equipmentTag}
-                              stamp={
-                                includeStamp
-                                  ? { ...stampData, issuedDate: formattedDate, signedDate: formattedSignedDate }
-                                  : undefined
-                              }
+                              stamp={includeStamp ? { ...stampData, issuedDate: formattedDate, signedDate: formattedSignedDate } : undefined}
                             />
                           )}
 
