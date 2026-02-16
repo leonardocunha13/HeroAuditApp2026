@@ -45,7 +45,6 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
   const viewerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [pdfLoading, setPdfLoading] = useState(false);
-  const [PDFPreviewURL, setPDFPreviewURL] = useState<string | null>(null);
   const [stampData, setStampData] = useState({
     issuedDate: "",
     signedDate: "",
@@ -239,18 +238,18 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     useEffect(() => {
       const generateImage = async () => {
         console.log("Generating PDF preview with:", {
-      firstPageGroup,
-      responses,
-      formName,
-      revision,
-      orientation,
-      pageSize,
-      docNumber,
-      docNumberRevision,
-      equipmentName,
-      equipmentTag,
-      stamp,
-    });
+          firstPageGroup,
+          responses,
+          formName,
+          revision,
+          orientation,
+          pageSize,
+          docNumber,
+          docNumberRevision,
+          equipmentName,
+          equipmentTag,
+          stamp,
+        });
         const safeStamp = stamp
           ? {
             issuedDate: stamp.issuedDate || "",
@@ -285,7 +284,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
           const reader = new FileReader();
           reader.onloadend = () => setImgURL(reader.result as string);
           reader.readAsDataURL(blob);
-
+          console.log("Blob size:", blob?.size, blob?.type);
           console.log("PDF preview generated", { stamp, docNumberRevision, revision });
         } catch (err) {
           console.error("PDF preview generation error:", err);
@@ -310,7 +309,17 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     ]);
 
     if (!imgURL) return <div>Loading preview...</div>;
-    return <img src={imgURL} style={{ width: "100%" }} />;
+
+    return (
+      <object
+        data={imgURL}
+        type="application/pdf"
+        width="100%"
+        height="100%"
+      >
+        PDF preview not available
+      </object>
+    );
   };
 
 
@@ -600,7 +609,6 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                             checked={includeStamp}
                             onChange={(e) => {
                               setIncludeStamp(e.target.checked);
-                              if (!e.target.checked) setPDFPreviewURL(null);
                             }}
                           />
                           Include Client Stamp
