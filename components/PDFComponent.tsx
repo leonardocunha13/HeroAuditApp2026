@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     color: 'grey',
   },
 
-  
+
 });
 const stylesStamp = StyleSheet.create({
   stampWrapper: {
@@ -147,11 +147,6 @@ const stylesStamp = StyleSheet.create({
   },
 });
 
-const statusPositions: Record<string, { top?: number; bottom?: number; left?: number; right?: number }> = {
-  "REVISE - AS NOTED": { top: 65, left: 42 },
-  "APPROVED": { top: 74.5, left: 42 },
-  "": {},
-};
 
 function renderFieldValue(element: FormElementInstance, value: unknown) {
 
@@ -919,14 +914,22 @@ export default function PDFDocument({ elements, responses, formName, revision, o
               fixed
             >
               <Image src={STAMP_SRC} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 40, left: 75 }]}>{stamp.issuedDate}</Text>
-              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 48, left: 75 }]}>{stamp.reviewer}</Text>
-              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 56, left: 75 }]}>{stamp.reviewerRole}</Text>
-              <Text style={[stylesStamp.stampText, { fontSize: 6, fontWeight: "bold" }, statusPositions[stamp.status]]}>
-                X
-              </Text>
-              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 82.5, left: 75 }]}>{stamp.signed}</Text>
-              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 91, left: 75 }]}>{stamp.signedDate}</Text>
+              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 29.5, left: 83 }]}>{stamp.issuedDate}</Text>
+              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 35, left: 83 }]}>{stamp.reviewer}</Text>
+              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 41, left: 83 }]}>{stamp.reviewerRole}</Text>
+              {stamp.signed && (
+                <Image
+                  src={stamp.signed}
+                  style={{
+                    position: "absolute",
+                    top: 45,      // adjust inside stamp
+                    left: 40,     // adjust inside stamp
+                    width: 110,
+                    height: 13,
+                    objectFit: "contain",
+                  }}
+                />
+              )}
             </View>
           )}
 

@@ -13,6 +13,7 @@ import { Label, Input } from "@aws-amplify/ui-react";
 import { X } from "lucide-react";
 import { ImShare } from "react-icons/im";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import SignatureCanvas from "react-signature-canvas";
 
 const PDF_SIZES = {
   A4: { portrait: { w: 700, h: 842 }, landscape: { w: 700, h: 842 } },
@@ -42,6 +43,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
   const [inputValue, setInputValue] = useState<string>("");
   const [users] = useState<{ email: string; name: string }[]>([]);
   const [includeStamp, setIncludeStamp] = useState(false);
+  const sigRef = useRef<SignatureCanvas | null>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -386,6 +388,46 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     }
   };
 
+
+ /* const handleDownloadPDF = async () => {
+    setLoading(true);
+    try {
+      const resolvedGroups = await prepareResolvedElements(pageGroups);
+
+      const blob = await pdf(
+        <PDFDocument
+          elements={resolvedGroups}
+          responses={responses}
+          formName={formName}
+          revision={revision}
+          orientation={orientation}
+          pageSize={pageSize}
+          docNumber={docNumber}
+          docNumberRevision={docNumberRevision}
+          equipmentName={equipmentName}
+          equipmentTag={equipmentTag}
+          stamp={
+            includeStamp
+              ? { ...stampData, issuedDate: formattedDate }
+              : undefined
+          }
+        />
+      ).toBlob();
+
+      // download
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const fileName = `${formName}_REV${revision}_${docNumber}_REV${docNumberRevision}.pdf`;
+      link.download = fileName;
+      link.click();
+    } catch (err) {
+      console.error("PDF generation error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };*/
+
   return (
     <div className="flex flex-col items-center w-full h-full">
       {/* Top Bar */}
@@ -506,14 +548,16 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                           />
                           Include Client Stamp
                         </Label>
-                        <Button
+                          <Button
                           className="mt-2 w-full"
                           onClick={handleSharePDF}
                           disabled={pdfLoading || selectedUsers.length === 0}
                         >
                           {pdfLoading ? "Sending..." : "Send PDF via Email"}
                         </Button>
-
+                        {/*<Button onClick={handleDownloadPDF} className="mt-2 w-full" disabled={loading}>
+                          {loading ? "Generating..." : "Download PDF for Test"}
+                        </Button>*/}
                         {includeStamp && (
                           <div className="flex flex-col gap-3 overflow-y-auto max-h-[40vh]">
                             <div>
@@ -545,41 +589,43 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                               />
                             </div>
                             <div>
-                              <Label>Status</Label>
-                              <div className="flex flex-col gap-1 mt-1">
-                                {[
-                                  "REVISE - AS NOTED",
-                                  "APPROVED",
-                                ].map((status) => (
-                                  <label key={status} className="flex items-center gap-2">
-                                    <input
-                                      type="radio"
-                                      name="stampStatus"
-                                      checked={stampData.status === status}
-                                      onChange={() => setStampData({ ...stampData, status })}
-                                    />
-                                    <span>{status}</span>
-                                  </label>
-                                ))}
-                              </div>
-                              <div>
-                                <Label>Signed</Label>
-                                <Input
-                                  value={stampData.signed}
-                                  onChange={(e) =>
-                                    setStampData({ ...stampData, signed: e.target.value })
-                                  }
+                              <Label>Signature</Label>
+
+                              <div className="border rounded bg-white">
+                                <SignatureCanvas
+                                  ref={sigRef}
+                                  penColor="black"
+                                  canvasProps={{
+                                    width: 400,
+                                    height: 100,
+                                    className: "signatureCanvas",
+                                  }}
                                 />
                               </div>
-                              <div>
-                                <Label>Date</Label>
-                                <Input
-                                  type="date"
-                                  value={stampData.signedDate}
-                                  onChange={(e) =>
-                                    setStampData({ ...stampData, signedDate: e.target.value })
-                                  }
-                                />
+
+                              <div className="flex gap-2 mt-2">
+                                <Button
+                                  type="button"
+                                  onClick={() => sigRef.current?.clear()}
+                                  variant="outline"
+                                >
+                                  Clear
+                                </Button>
+
+                                <Button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!sigRef.current) return;
+                                    const dataURL = sigRef.current.getCanvas().toDataURL("image/png");
+
+                                    setStampData({
+                                      ...stampData,
+                                      signed: dataURL, // ⭐ store image instead of text
+                                    });
+                                  }}
+                                >
+                                  Save Signature
+                                </Button>
                               </div>
                             </div>
                             <Label>Click on the PDF preview to place the stamp.</Label>
