@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import React from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { FormElementInstance } from "./FormElements";
 import { Button } from "./ui/button";
 import { GetFormNameFromSubmissionId } from "../actions/form";
@@ -24,6 +25,129 @@ interface Props {
   responses: { [key: string]: unknown };
   submissionID: string;
 }
+interface PDFImagePreviewProps {
+  firstPageGroup: FormElementInstance[][];
+  responses: { [key: string]: unknown };
+  formName: string;
+  revision: string | number;
+  orientation: "portrait" | "landscape";
+  pageSize: "A4" | "A3";
+  docNumber: string;
+  docNumberRevision: string | number;
+  equipmentName: string;
+  equipmentTag: string;
+  stamp?: {
+    issuedDate: string;
+    signedDate: string;
+    reviewer?: string;
+    reviewerRole?: string;
+    status?: string;
+    signed?: string;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+  };
+  includeStamp: boolean;
+}
+
+const PDFImagePreview = React.memo(({
+  firstPageGroup,
+  responses,
+  formName,
+  revision,
+  orientation,
+  pageSize,
+  docNumber,
+  docNumberRevision,
+  equipmentName,
+  equipmentTag,
+  stamp,
+  includeStamp,
+}: PDFImagePreviewProps) => {
+  const [pdfURL, setPdfURL] = useState<string | null>(null);
+
+  useEffect(() => {
+    const generatePDF = async () => {
+      const safeStamp = stamp
+        ? {
+          issuedDate: stamp.issuedDate || "",
+          signedDate: stamp.signedDate || "",
+          reviewer: stamp.reviewer || "",
+          reviewerRole: stamp.reviewerRole || "",
+          status: stamp.status || "",
+          signed: stamp.signed || "",
+          x: stamp.x ?? 10,
+          y: stamp.y ?? 10,
+          width: stamp.width ?? 200,
+          height: stamp.height ?? 100,
+        }
+        : undefined;
+
+      try {
+        const resolvedElements = await prepareResolvedElements(firstPageGroup);
+        const blob = await pdf(
+          <PDFDocument
+            elements={resolvedElements}
+            responses={responses}
+            formName={formName}
+            revision={revision}
+            orientation={orientation}
+            pageSize={pageSize}
+            docNumber={docNumber}
+            docNumberRevision={docNumberRevision}
+            equipmentName={equipmentName}
+            equipmentTag={equipmentTag}
+            stamp={includeStamp ? safeStamp : undefined}
+          />
+        ).toBlob();
+
+        const url = URL.createObjectURL(blob);
+        setPdfURL(url);
+      } catch (err) {
+        console.error("PDF generation error:", err);
+        setPdfURL(null);
+      }
+    };
+
+    if (firstPageGroup.length > 0) generatePDF();
+  }, [
+    firstPageGroup,
+    responses,
+    stamp,
+    orientation,
+    pageSize,
+    formName,
+    revision,
+    docNumber,
+    docNumberRevision,
+    equipmentName,
+    equipmentTag,
+    includeStamp,
+  ]);
+
+
+  if (!pdfURL) return <div>Loading PDF preview...</div>;
+
+  return (
+    <div style={{ width: "100%", height: "100%", border: "1px solid #ccc" }}>
+      <object
+        data={pdfURL}
+        type="application/pdf"
+        width="100%"
+        height="100%"
+      >
+        <iframe
+          src={pdfURL}
+          width="100%"
+          height="100%"
+          style={{ border: "none" }}
+        >
+        </iframe>
+      </object>
+    </div>
+  );
+});
 
 export default function SubmissionRenderer({ submissionID, elements, responses }: Props) {
   const [formName, setFormName] = useState<string>("Loading...");
@@ -46,6 +170,8 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
   const sigRef = useRef<SignatureCanvas | null>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+  const [sigChanged, setSigChanged] = useState(false);
+  const [sigStatus, setSigStatus] = useState(""); // "" | "Saving..." | "Saved"
   const [pdfLoading, setPdfLoading] = useState(false);
   const [stampData, setStampData] = useState({
     issuedDate: "",
@@ -59,6 +185,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     width: 200,
     height: 100,
   });
+  const [stampPreview, setStampPreview] = useState(stampData);
   useEffect(() => {
     const fetchFormName = async () => {
       try {
@@ -135,128 +262,26 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
         .toLocaleDateString("en-GB")
       : "";
 
-  interface PDFImagePreviewProps {
-    firstPageGroup: FormElementInstance[][];
-    responses: { [key: string]: unknown };
-    formName: string;
-    revision: string | number;
-    orientation: "portrait" | "landscape";
-    pageSize: "A4" | "A3";
-    docNumber: string;
-    docNumberRevision: string | number;
-    equipmentName: string;
-    equipmentTag: string;
-    stamp?: {
-      issuedDate: string;
-      signedDate: string;
-      reviewer?: string;
-      reviewerRole?: string;
-      status?: string;
-      signed?: string;
-      x?: number;
-      y?: number;
-      width?: number;
-      height?: number;
+  const memoFirstPage = useMemo(
+    () => (pageGroups.length > 0 ? [pageGroups[0]] : []),
+    [pageGroups]
+  );
+
+  const memoResponses = useMemo(() => responses, [responses]);
+
+  const memoStamp = useMemo(() => {
+    if (!includeStamp) return undefined;
+    return {
+      ...stampData,
+      issuedDate: formattedDate,
+      signedDate: formattedSignedDate,
     };
-    includeStamp: boolean;
-  }
+  }, [includeStamp, stampData, formattedDate, formattedSignedDate]);
 
-  const PDFImagePreview = ({
-    firstPageGroup,
-    responses,
-    formName,
-    revision,
-    orientation,
-    pageSize,
-    docNumber,
-    docNumberRevision,
-    equipmentName,
-    equipmentTag,
-    stamp,
-    includeStamp,
-  }: PDFImagePreviewProps) => {
-    const [pdfURL, setPdfURL] = useState<string | null>(null);
 
-    useEffect(() => {
-      const generatePDF = async () => {
-        const safeStamp = stamp
-          ? {
-            issuedDate: stamp.issuedDate || "",
-            signedDate: stamp.signedDate || "",
-            reviewer: stamp.reviewer || "",
-            reviewerRole: stamp.reviewerRole || "",
-            status: stamp.status || "",
-            signed: stamp.signed || "",
-            x: stamp.x ?? 10,
-            y: stamp.y ?? 10,
-            width: stamp.width ?? 200,
-            height: stamp.height ?? 100,
-          }
-          : undefined;
 
-        try {
-          const resolvedElements = await prepareResolvedElements(firstPageGroup);
-          const blob = await pdf(
-            <PDFDocument
-              elements={resolvedElements}
-              responses={responses}
-              formName={formName}
-              revision={revision}
-              orientation={orientation}
-              pageSize={pageSize}
-              docNumber={docNumber}
-              docNumberRevision={docNumberRevision}
-              equipmentName={equipmentName}
-              equipmentTag={equipmentTag}
-              stamp={includeStamp ? safeStamp : undefined}
-            />
-          ).toBlob();
 
-          const url = URL.createObjectURL(blob);
-          setPdfURL(url);
-        } catch (err) {
-          console.error("PDF generation error:", err);
-          setPdfURL(null);
-        }
-      };
 
-      if (firstPageGroup.length > 0) generatePDF();
-    }, [
-      firstPageGroup,
-      responses,
-      formName,
-      revision,
-      orientation,
-      pageSize,
-      docNumber,
-      docNumberRevision,
-      equipmentName,
-      equipmentTag,
-      stamp,
-      includeStamp,
-    ]);
-
-    if (!pdfURL) return <div>Loading PDF preview...</div>;
-
-    return (
-      <div style={{ width: "100%", height: "100%", border: "1px solid #ccc" }}>
-        <object
-          data={pdfURL}
-          type="application/pdf"
-          width="100%"
-          height="100%"
-        >
-          <iframe
-            src={pdfURL}
-            width="100%"
-            height="100%"
-            style={{ border: "none" }}
-          >
-          </iframe>
-        </object>
-      </div>
-    );
-  };
 
   const handleExportPDF = async () => {
     setLoading(true);
@@ -389,44 +414,44 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
   };
 
 
- /* const handleDownloadPDF = async () => {
-    setLoading(true);
-    try {
-      const resolvedGroups = await prepareResolvedElements(pageGroups);
-
-      const blob = await pdf(
-        <PDFDocument
-          elements={resolvedGroups}
-          responses={responses}
-          formName={formName}
-          revision={revision}
-          orientation={orientation}
-          pageSize={pageSize}
-          docNumber={docNumber}
-          docNumberRevision={docNumberRevision}
-          equipmentName={equipmentName}
-          equipmentTag={equipmentTag}
-          stamp={
-            includeStamp
-              ? { ...stampData, issuedDate: formattedDate }
-              : undefined
-          }
-        />
-      ).toBlob();
-
-      // download
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      const fileName = `${formName}_REV${revision}_${docNumber}_REV${docNumberRevision}.pdf`;
-      link.download = fileName;
-      link.click();
-    } catch (err) {
-      console.error("PDF generation error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };*/
+  /* const handleDownloadPDF = async () => {
+     setLoading(true);
+     try {
+       const resolvedGroups = await prepareResolvedElements(pageGroups);
+ 
+       const blob = await pdf(
+         <PDFDocument
+           elements={resolvedGroups}
+           responses={responses}
+           formName={formName}
+           revision={revision}
+           orientation={orientation}
+           pageSize={pageSize}
+           docNumber={docNumber}
+           docNumberRevision={docNumberRevision}
+           equipmentName={equipmentName}
+           equipmentTag={equipmentTag}
+           stamp={
+             includeStamp
+               ? { ...stampData, issuedDate: formattedDate }
+               : undefined
+           }
+         />
+       ).toBlob();
+ 
+       // download
+       const url = URL.createObjectURL(blob);
+       const link = document.createElement("a");
+       link.href = url;
+       const fileName = `${formName}_REV${revision}_${docNumber}_REV${docNumberRevision}.pdf`;
+       link.download = fileName;
+       link.click();
+     } catch (err) {
+       console.error("PDF generation error:", err);
+     } finally {
+       setLoading(false);
+     }
+   };*/
 
   return (
     <div className="flex flex-col items-center w-full h-full">
@@ -477,9 +502,9 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
 
                 <DialogContent
                   className="bg-white dark:bg-neutral-900 text-black dark:text-white
-         shadow-xl border border-gray-300 dark:border-neutral-700
-         rounded-lg fixed left-1/2 -translate-x-1/2 w-[95vw] max-w-[900px] max-h-[90vh]
-         overflow-hidden flex flex-col"
+     shadow-xl border border-gray-300 dark:border-neutral-700
+     rounded-lg fixed left-1/2 -translate-x-1/2 w-[98vw] max-w-[1200px] max-h-[95vh]
+     flex flex-col overflow-visible"
                 >
                   <DialogHeader>
                     <DialogTitle>Share PDF</DialogTitle>
@@ -487,7 +512,10 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
 
                   <div className="flex flex-col md:flex-row gap-6 overflow-hidden px-4 pb-4 h-full">
                     {/* Left panel - fixed width */}
-                    <div className="flex flex-col gap-4 overflow-y-auto max-h-[80vh] w-[350px] flex-shrink-0">
+                    <div
+                      className="flex flex-col gap-4 overflow-y-auto w-[500px] flex-shrink-0 transition-all duration-300"
+                      style={{ maxHeight: includeStamp ? "85vh" : "40vh" }}
+                    >
                       {/* Left panel content */}
                       {/* Email input */}
                       <div className="flex flex-col gap-2">
@@ -543,12 +571,17 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                             type="checkbox"
                             checked={includeStamp}
                             onChange={(e) => {
-                              setIncludeStamp(e.target.checked);
+                              const checked = e.target.checked;
+                              setIncludeStamp(checked);
+
+                              if (checked) {
+                                setStampPreview(stampData); // copy ONCE
+                              }
                             }}
                           />
                           Include Client Stamp
                         </Label>
-                          <Button
+                        <Button
                           className="mt-2 w-full"
                           onClick={handleSharePDF}
                           disabled={pdfLoading || selectedUsers.length === 0}
@@ -559,32 +592,35 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                           {loading ? "Generating..." : "Download PDF for Test"}
                         </Button>*/}
                         {includeStamp && (
-                          <div className="flex flex-col gap-3 overflow-y-auto max-h-[40vh]">
+                          <div className="flex flex-col gap-3 overflow-y-auto max-h-[70vh]">
+                            <Label style={{ fontSize: 14 }}>
+                              Click on the PDF preview to place the stamp. After filling in the details, press "Apply Stamp".
+                            </Label>
                             <div>
                               <Label>Reviewed Date</Label>
                               <Input
                                 type="date"
-                                value={stampData.issuedDate}
+                                value={stampPreview.issuedDate}
                                 onChange={(e) =>
-                                  setStampData({ ...stampData, issuedDate: e.target.value })
+                                  setStampPreview({ ...stampPreview, issuedDate: e.target.value })
                                 }
                               />
                             </div>
                             <div>
                               <Label>Reviewer</Label>
                               <Input
-                                value={stampData.reviewer}
+                                value={stampPreview.reviewer}
                                 onChange={(e) =>
-                                  setStampData({ ...stampData, reviewer: e.target.value })
+                                  setStampPreview({ ...stampPreview, reviewer: e.target.value })
                                 }
                               />
                             </div>
                             <div>
                               <Label>Reviewer Role</Label>
                               <Input
-                                value={stampData.reviewerRole}
+                                value={stampPreview.reviewerRole}
                                 onChange={(e) =>
-                                  setStampData({ ...stampData, reviewerRole: e.target.value })
+                                  setStampPreview({ ...stampPreview, reviewerRole: e.target.value })
                                 }
                               />
                             </div>
@@ -595,10 +631,10 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                                 <SignatureCanvas
                                   ref={sigRef}
                                   penColor="black"
-                                  canvasProps={{
-                                    width: 400,
-                                    height: 100,
-                                    className: "signatureCanvas",
+                                  canvasProps={{ width: 400, height: 100, className: "signatureCanvas" }}
+                                  onEnd={() => {
+                                    setSigChanged(true);      // mark as changed
+                                    setSigStatus("");          // reset the status to show "Save Signature"
                                   }}
                                 />
                               </div>
@@ -606,7 +642,11 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                               <div className="flex gap-2 mt-2">
                                 <Button
                                   type="button"
-                                  onClick={() => sigRef.current?.clear()}
+                                  onClick={() => {
+                                    sigRef.current?.clear();
+                                    setSigChanged(true); // mark as changed
+                                    setSigStatus("");    // reset the label
+                                  }}
                                   variant="outline"
                                 >
                                   Clear
@@ -616,19 +656,27 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                                   type="button"
                                   onClick={() => {
                                     if (!sigRef.current) return;
-                                    const dataURL = sigRef.current.getCanvas().toDataURL("image/png");
 
-                                    setStampData({
-                                      ...stampData,
-                                      signed: dataURL, // ⭐ store image instead of text
-                                    });
+                                    setSigStatus("Saving...");
+
+                                    const dataURL = sigRef.current.getCanvas().toDataURL("image/png");
+                                    setStampPreview({ ...stampPreview, signed: dataURL });
+
+                                    setTimeout(() => {
+                                      setSigStatus("Saved");
+                                      setSigChanged(false); // mark as saved
+                                    }, 500);
                                   }}
+                                  disabled={!sigChanged}
                                 >
-                                  Save Signature
+                                  {sigStatus || "Save Signature"}
                                 </Button>
                               </div>
+
+                              <Button className="mt-2 w-full" onClick={() => setStampData(stampPreview)}>Apply Stamp</Button>
+
                             </div>
-                            <Label>Click on the PDF preview to place the stamp.</Label>
+
                           </div>
                         )}
                       </div>
@@ -646,8 +694,8 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                           }}
                         >
                           <PDFImagePreview
-                            firstPageGroup={[pageGroups[0]]}
-                            responses={responses}
+                            firstPageGroup={memoFirstPage}
+                            responses={memoResponses}
                             formName={formName}
                             revision={revision}
                             orientation={orientation}
@@ -657,8 +705,9 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                             equipmentName={equipmentName}
                             equipmentTag={equipmentTag}
                             includeStamp={includeStamp}
-                            stamp={includeStamp ? { ...stampData, issuedDate: formattedDate, signedDate: formattedSignedDate } : undefined}
+                            stamp={memoStamp}
                           />
+
                           {/* Transparent overlay to capture clicks */}
                           <div
                             className="absolute top-0 left-0 w-full h-full"
