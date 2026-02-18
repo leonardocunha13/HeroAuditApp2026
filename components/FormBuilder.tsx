@@ -67,7 +67,7 @@ function FormBuilder({ formID, form, equipmentName, clientName, formName, revisi
             });
         }
     }, [formID, elements]);
-    
+
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
             saveProgress();
@@ -97,7 +97,24 @@ function FormBuilder({ formID, form, equipmentName, clientName, formName, revisi
             return () => clearTimeout(readyTimeout);
         }
     }, [form, setElements, isReady, setSelectedElement]);
+    useEffect(() => {
+        const handlePopState = async (event: PopStateEvent) => {
+            event.preventDefault();
 
+            await saveProgress();
+
+            // allow navigation AFTER saving
+            window.history.back();
+        };
+
+        // push a fake state so back button triggers popstate
+        window.history.pushState(null, "", window.location.href);
+        window.addEventListener("popstate", handlePopState);
+
+        return () => {
+            window.removeEventListener("popstate", handlePopState);
+        };
+    }, [saveProgress]);
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
             saveProgress();
