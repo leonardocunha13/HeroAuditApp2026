@@ -100,18 +100,18 @@ function FormSubmitComponent({ formUrl, content }: { content: FormElementInstanc
   }, [formUrl]);
 
   useEffect(() => {
-  const handlePageShow = (event: PageTransitionEvent) => {
-    if (event.persisted && formUrl && formtagId) {
-      const alreadySubmitted = sessionStorage.getItem(`submitted-${formUrl}-${formtagId}`);
-      if (alreadySubmitted) {
-        setSubmitted(true);
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted && formUrl && formtagId) {
+        const alreadySubmitted = sessionStorage.getItem(`submitted-${formUrl}-${formtagId}`);
+        if (alreadySubmitted) {
+          setSubmitted(true);
+        }
       }
-    }
-  };
+    };
 
-  window.addEventListener("pageshow", handlePageShow);
-  return () => window.removeEventListener("pageshow", handlePageShow);
-}, [formUrl, formtagId]);
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, [formUrl, formtagId]);
   // Update visit count & sessionStorage when formtagId or formUrl changes
   useEffect(() => {
     if (!formtagId) return;
@@ -120,6 +120,41 @@ function FormSubmitComponent({ formUrl, content }: { content: FormElementInstanc
     updateVisitCount(formUrl);
     sessionStorage.setItem(uniqueKey, "true");
   }, [formUrl, formtagId]);
+
+  useEffect(() => {
+    const checkSubmission = () => {
+      if (!formUrl || !formtagId) return;
+
+      const alreadySubmitted = sessionStorage.getItem(
+        `submitted-${formUrl}-${formtagId}`
+      );
+
+      if (alreadySubmitted) {
+        setSubmitted(true);
+      }
+    };
+
+    // Runs when tab becomes visible again (back button case)
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        checkSubmission();
+      }
+    };
+
+    // Runs when page restored from cache
+    const handlePageShow = () => {
+      checkSubmission();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pageshow", handlePageShow);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, [formUrl, formtagId]);
+
 
   // Save progress on unload and visibility change
   useEffect(() => {
@@ -193,7 +228,10 @@ function FormSubmitComponent({ formUrl, content }: { content: FormElementInstanc
       if (formtagId) formData.append("formTagId", formtagId);
 
       await submitFormAction(formData);
-      sessionStorage.setItem(`submitted-${formUrl}-${formtagId}`, "true");
+      if (formtagId) {
+        sessionStorage.setItem(`submitted-${formUrl}-${formtagId}`, "true");
+      }
+
       setSubmitted(true);
     } catch (error) {
       console.error(error);
