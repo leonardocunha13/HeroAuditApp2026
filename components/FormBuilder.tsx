@@ -125,7 +125,7 @@ function FormBuilder({ formID, form, equipmentName, clientName, formName, revisi
                     </h2>
                     <div className="flex items-center gap-2">
                         <PreviewDialogBtn />
-                        <PreviewPDFDialogBtn id={formID} formName={formName} revision={revision} />
+                        <PreviewPDFDialogBtn id={formID}formName={formName} revision={revision} />
                         {!form.published && <SaveFormBtn id={formID} />}
                         <PublishFormBtn id={formID} />
                     </div>

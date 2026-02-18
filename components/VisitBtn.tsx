@@ -25,7 +25,7 @@ function VisitBtn({ shareUrl }: { shareUrl: string }) {
   const { theme } = useTheme();
   const [showConfirm, setShowConfirm] = useState(false);
   const [retryRun, setRetryRun] = useState(false);
-
+  const [loading, setLoading] = useState(false);
   useEffect(() => {
     if (!isDialogOpen || !shareUrl) return;
 
@@ -108,55 +108,66 @@ function VisitBtn({ shareUrl }: { shareUrl: string }) {
   }
 
   const handleRunForm = async () => {
-    if (!selectedProjectId) {
+    try {
+      if (!selectedProjectId) {
+        toast({
+          title: "Please select a project",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!docNumber.trim()) {
+        toast({
+          title: "Document number is required",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!equipmentTag.trim()) {
+        toast({
+          title: "Equipment tag is required",
+          variant: "destructive",
+        });
+        return;
+      }
+      setLoading(true);
+      //console.log("Running form with params:", { shareUrl, equipmentTag, docNumber, selectedProjectId });
+      const { success, createdTagID, revisionBumped, createdFormTagID } = await runForm(
+        shareUrl,
+        equipmentTag,
+        docNumber,
+        selectedProjectId,
+        false // try first without forcing
+      );
+      //console.log("Returned param form runForm:", { success, createdTagID, revisionBumped, createdFormTagID });
+
+      if (!success && revisionBumped) {
+        setShowConfirm(true); // wait for user to confirm
+        return;
+      }
+
+      if (success && createdTagID && createdFormTagID) {
+        localStorage.setItem("tagId", createdTagID);
+        localStorage.setItem("formtagId", createdFormTagID);
+        router.push(`${window.location.origin}${shareUrl}`);
+        return;
+      }
+
       toast({
-        title: "Please select a project",
+        title: "Check the document number and equipment tag.",
         variant: "destructive",
       });
-      return;
-    }
-
-    if (!docNumber.trim()) {
+    } catch (err) {
+      console.error(err);
       toast({
-        title: "Document number is required",
+        title: "Failed to update form",
         variant: "destructive",
       });
-      return;
+    } finally {
+      setLoading(false); // stop loading
     }
-
-    if (!equipmentTag.trim()) {
-      toast({
-        title: "Equipment tag is required",
-        variant: "destructive",
-      });
-      return;
-    }
-    console.log("Running form with params:", { shareUrl, equipmentTag, docNumber, selectedProjectId });
-    const { success, createdTagID, revisionBumped, createdFormTagID } = await runForm(
-      shareUrl,
-      equipmentTag,
-      docNumber,
-      selectedProjectId,
-      false // try first without forcing
-    );
-    console.log("Returned param form runForm:", { success, createdTagID, revisionBumped, createdFormTagID });
-
-    if (!success && revisionBumped) {
-      setShowConfirm(true); // wait for user to confirm
-      return;
-    }
-
-    if (success && createdTagID && createdFormTagID) {
-      localStorage.setItem("tagId", createdTagID);
-      localStorage.setItem("formtagId", createdFormTagID);
-      router.push(`${window.location.origin}${shareUrl}`);
-      return;
-    }
-
-    toast({
-      title: "Check the document number and equipment tag.",
-      variant: "destructive",
-    });
   };
 
   return (
@@ -206,13 +217,13 @@ function VisitBtn({ shareUrl }: { shareUrl: string }) {
               alignItems="center"
               marginBottom="1rem"
             >
-              <Heading className="text-foreground" level={3}>Update Details</Heading>
+              <Heading className="text-foreground mb-1" level={3}>Update Details</Heading>
               <Button className="link-button" onClick={handleDialogClose}>
                 ✕
               </Button>
             </Flex>
 
-            <Text className="text-foreground" marginBottom="1rem">Select the project, inform the document number and equipment tag to update the form.</Text>
+            <Text className="mb-1 text-foreground" marginBottom="1rem">Select the project, inform the document number and equipment tag to update the form.</Text>
 
             {error && (
               <Alert variation="error" isDismissible>
@@ -279,8 +290,9 @@ function VisitBtn({ shareUrl }: { shareUrl: string }) {
               <Button
                 className="w-[200px]"
                 onClick={handleRunForm}
+                disabled={loading} // disables the button while loading
               >
-                Update
+                {loading ? "Generating..." : "Update"}  {/* toggle text */}
               </Button>
             </Flex>
           </View>

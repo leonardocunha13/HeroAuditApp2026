@@ -86,6 +86,32 @@ function FormSubmitComponent({ formUrl, content }: { content: FormElementInstanc
     if (stored) setFormtagId(stored);
   }, []);
 
+  useEffect(() => {
+    const stored = localStorage.getItem("formtagId");
+    if (stored) setFormtagId(stored);
+
+    // --- NEW: check if this form was already submitted ---
+    if (stored) {
+      const alreadySubmitted = sessionStorage.getItem(`submitted-${formUrl}-${stored}`);
+      if (alreadySubmitted) {
+        setSubmitted(true);
+      }
+    }
+  }, [formUrl]);
+
+  useEffect(() => {
+  const handlePageShow = (event: PageTransitionEvent) => {
+    if (event.persisted && formUrl && formtagId) {
+      const alreadySubmitted = sessionStorage.getItem(`submitted-${formUrl}-${formtagId}`);
+      if (alreadySubmitted) {
+        setSubmitted(true);
+      }
+    }
+  };
+
+  window.addEventListener("pageshow", handlePageShow);
+  return () => window.removeEventListener("pageshow", handlePageShow);
+}, [formUrl, formtagId]);
   // Update visit count & sessionStorage when formtagId or formUrl changes
   useEffect(() => {
     if (!formtagId) return;
@@ -167,6 +193,7 @@ function FormSubmitComponent({ formUrl, content }: { content: FormElementInstanc
       if (formtagId) formData.append("formTagId", formtagId);
 
       await submitFormAction(formData);
+      sessionStorage.setItem(`submitted-${formUrl}-${formtagId}`, "true");
       setSubmitted(true);
     } catch (error) {
       console.error(error);
