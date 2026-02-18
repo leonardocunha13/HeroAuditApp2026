@@ -278,11 +278,6 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     };
   }, [includeStamp, stampData, formattedDate, formattedSignedDate]);
 
-
-
-
-
-
   const handleExportPDF = async () => {
     setLoading(true);
     const resolvedGroups = await prepareResolvedElements(pageGroups);
