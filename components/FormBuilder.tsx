@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import PreviewDialogBtn from "./PreviewDialogBtn";
 import Designer from "./Designer";
 import {
@@ -22,12 +22,14 @@ import Link from "next/link";
 import { BsArrowLeft, BsArrowRight } from "react-icons/bs";
 import { type Schema } from '../amplify/data/resource';
 import PreviewPDFDialogBtn from "./PreviewPDFDialogBtn";
+import { saveFormAction } from "../actions/form";
 
 type Form = Schema['Form']['type'];
 
 function FormBuilder({ formID, form, equipmentName, clientName, formName, revision }: { formID: string, form: Form, equipmentName: string, clientName: string, formName: string, revision: number }) {
     const { setElements, setSelectedElement } = useDesigner();
     const [isReady, setIsReady] = useState(false);
+    const { elements } = useDesigner();
     const mouseSensor = useSensor(MouseSensor, {
         activationConstraint: { distance: 10 },
     });
@@ -35,6 +37,56 @@ function FormBuilder({ formID, form, equipmentName, clientName, formName, revisi
         activationConstraint: { delay: 300, tolerance: 5 },
     });
     const sensors = useSensors(mouseSensor, touchSensor);
+
+    const saveProgress = useCallback(async () => {
+        if (!formID) {
+            toast({
+                title: "Missing form tag ID",
+                description: "Unable to save progress without Form ID",
+                variant: "destructive",
+            });
+            return;
+        }
+        try {
+            const formData = new FormData();
+            formData.append("id", formID);  // Include the form ID
+            formData.append("content", JSON.stringify(elements));  // Include the form content
+
+            await saveFormAction(formData);
+            toast({
+                title: "Progress saved",
+                description: "Your progress has been saved successfully.",
+                className: "bg-green-500 text-white",
+            });
+        } catch (error) {
+            console.error(error);
+            toast({
+                title: "Save failed",
+                description: "Could not save your progress.",
+                variant: "destructive",
+            });
+        }
+    }, [formID, elements]);
+    
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            saveProgress();
+            e.preventDefault();
+            e.returnValue = '';
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') saveProgress();
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [saveProgress]);
 
     useEffect(() => {
         if (!isReady) {
@@ -45,6 +97,26 @@ function FormBuilder({ formID, form, equipmentName, clientName, formName, revisi
             return () => clearTimeout(readyTimeout);
         }
     }, [form, setElements, isReady, setSelectedElement]);
+
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            saveProgress();
+            e.preventDefault();
+            e.returnValue = '';
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') saveProgress();
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [saveProgress]);
 
     if (!isReady) {
         return (
@@ -125,7 +197,7 @@ function FormBuilder({ formID, form, equipmentName, clientName, formName, revisi
                     </h2>
                     <div className="flex items-center gap-2">
                         <PreviewDialogBtn />
-                        <PreviewPDFDialogBtn id={formID}formName={formName} revision={revision} />
+                        <PreviewPDFDialogBtn id={formID} formName={formName} revision={revision} />
                         {!form.published && <SaveFormBtn id={formID} />}
                         <PublishFormBtn id={formID} />
                     </div>
