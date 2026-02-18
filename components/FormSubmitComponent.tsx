@@ -177,12 +177,30 @@ function FormSubmitComponent({ formUrl, content }: { content: FormElementInstanc
     };
   }, [saveProgress]);
 
-  // Save progress when formtagId or content changes
   useEffect(() => {
-    if (formtagId && content.length > 0) {
-      saveProgress();
-    }
-  }, [formtagId, content, saveProgress]);
+    let navigating = false;
+
+    const handlePopState = async (event: PopStateEvent) => {
+      if (navigating) return;
+      navigating = true;
+
+      event.preventDefault();
+
+      await saveProgress();
+
+      // allow navigation after saving
+      window.history.back();
+    };
+
+    // create history trap so back button triggers popstate
+    window.history.pushState(null, "", window.location.href);
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [saveProgress]);
 
   // Pull down to save progress on touch devices (when at top)
   useEffect(() => {
