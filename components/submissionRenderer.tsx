@@ -506,8 +506,17 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
      rounded-lg fixed left-1/2 -translate-x-1/2 w-[98vw] max-w-[1200px] max-h-[95vh]
      flex flex-col overflow-visible"
                 >
-                  <DialogHeader>
+                  <DialogHeader className="flex flex-row items-center justify-between">
                     <DialogTitle>Share PDF</DialogTitle>
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setOpen(false)}
+                      className="h-8 w-8"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
                   </DialogHeader>
 
                   <div className="flex flex-col md:flex-row gap-6 overflow-hidden px-4 pb-4 h-full">
@@ -631,7 +640,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                                 <SignatureCanvas
                                   ref={sigRef}
                                   penColor="black"
-                                  canvasProps={{ width: 400, height: 100, className: "signatureCanvas" }}
+                                  canvasProps={{ width: 600, height: 100, className: "signatureCanvas" }}
                                   onEnd={() => {
                                     setSigChanged(true);      // mark as changed
                                     setSigStatus("");          // reset the status to show "Save Signature"
