@@ -613,8 +613,8 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
           onClick={(e) => e.stopPropagation()}
           className="cell-modal absolute z-50 bg-white border rounded-lg p-2 shadow-lg flex items-center gap-2"
           style={{
-            top: activeCell.rect?.top! + window.scrollY - 45,
-            left: activeCell.rect?.left! + window.scrollX,
+            top: (activeCell.rect?.top ?? 0) + window.scrollY - 45,
+            left: (activeCell.rect?.left ?? 0) + window.scrollX,
           }}
         >
           <label className="text-sm">Merge {mergeBuilderOpen.direction}:</label>
