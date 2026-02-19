@@ -34,6 +34,22 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
   const { updateElement } = useDesigner();
   const [headerRowIndexes, setHeaderRowIndexes] = useState<number[]>(element.extraAttributes.headerRowIndexes || []);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectBuilderOpen, setSelectBuilderOpen] = useState(false);
+  const selectedCellRef = useRef<{ row: number; col: number } | null>(null);
+  const [showGuidance, setShowGuidance] = useState(false);
+  const [selectCount, setSelectCount] = useState(2);
+  const [selectOptions, setSelectOptions] = useState<string[]>([]);
+  const [mergeBuilderOpen, setMergeBuilderOpen] = useState<{
+    direction: "right" | "down";
+    row: number;
+    col: number;
+  } | null>(null);
+  const [mergeCount, setMergeCount] = useState(2);
+  const [activeCell, setActiveCell] = useState<{
+    row: number;
+    col: number;
+    rect: DOMRect | null;
+  } | null>(null);
   const form = useForm<propertiesFormSchemaType>({
     resolver: zodResolver(propertiesSchema),
     defaultValues: {
@@ -171,6 +187,21 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
     };
   }, [form, element, element.extraAttributes, updateElement]);
 
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+
+      if (!target.closest(".table-cell-editor") &&
+        !target.closest(".cell-toolbar") &&
+        !target.closest(".cell-modal")) {
+        setActiveCell(null);
+      }
+    }
+
+    window.addEventListener("mousedown", handleClickOutside);
+    return () => window.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
 
   function deleteRow(rowIndex: number) {
     const newData = data.filter((_, i) => i !== rowIndex);
@@ -255,9 +286,35 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
     );
   }
 
+  function insertTag(tag: string) {
+    const cell = selectedCellRef.current;
+    if (!cell) return;
+
+    const { row, col } = cell;
+
+    const newData = [...data];
+    newData[row][col] = (newData[row][col] || "") + tag;
+
+    setData(newData);
+
+    updateElement(element.id, {
+      ...element,
+      extraAttributes: {
+        ...element.extraAttributes,
+        data: newData,
+      },
+    });
+  }
+
+
   return (
     <Form {...form}>
-      <form onBlur={form.handleSubmit(applyChanges)}
+      <form
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) {
+            form.handleSubmit(applyChanges)();
+          }
+        }}
         onSubmit={(e) => e.preventDefault()}
         className="space-y-3">
         <FormField
@@ -287,25 +344,46 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
         <Divider orientation="horizontal" size="small" color="gray" marginTop="1rem" marginBottom="1rem" />
         <div className="flex justify-between items-center">
           <div className="space-y-0.5">
-            <FormLabel>Table Content</FormLabel>
-            <FormDescription>
-              Use <code>[checkbox]</code> as the cell value to display a checkbox. <br />
-              Use <code>[select:"Option1":["Option1","Option2"]]</code> to display a dropdown with options.<br />
-              Use <code>[number:]</code> to display a number input field.<br />
-              Use <code>[date:]</code> to display a date picker.<br />
-              Use <code>[camera]</code> to open the camera and make register of the process performed.<br />
-              Use <code>[SUMMARY]</code> to display buttons to select the overall result of the table.<br />
-              Use <code>[merge:right:#]Text</code> to merge with # cells to the right.<br />
-              Use <code>[merge:down:#]Text</code> to merge with # cells below.<br />
-              Use <code>" "</code> (a single space) to create a non-editable empty cell.<br />
-              For a regular editable text field, leave the cell blank.
-            </FormDescription>
+
+            <div className="flex items-center justify-between mb-2">
+              <div className="mb-2">
+                <FormLabel>Table Content</FormLabel>
+                <span className="text-sm text-muted-foreground block mt-1">
+                  Click on a cell to see options for including content in the table.
+                </span>
+                <div className="mt-2">
+
+                </div>
+              </div>
+            </div>
+            {showGuidance && (
+              <FormDescription className="mb-2 p-2 border rounded bg-gray-50">
+                Use <code>[checkbox]</code> as the cell value to display a checkbox. <br />
+                Use <code>[select:"Option1":["Option1","Option2"]]</code> to display a dropdown with options.<br />
+                Use <code>[number:]</code> to display a number input field.<br />
+                Use <code>[date:]</code> to display a date picker.<br />
+                Use <code>[camera]</code> to open the camera and make register of the process performed.<br />
+                Use <code>[SUMMARY]</code> to display buttons to select the overall result of the table.<br />
+                Use <code>[merge:right:#]Text</code> to merge with # cells to the right.<br />
+                Use <code>[merge:down:#]Text</code> to merge with # cells below.<br />
+                Use <code>" "</code> (a single space) to create a non-editable empty cell.<br />
+                For a regular editable text field, leave the cell blank.
+              </FormDescription>
+            )}
           </div>
+          <div className="flex flex-col gap-2 mt-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowGuidance((prev) => !prev)}
+            >
+              {showGuidance ? "Hide Guidance" : "Show Guidance"} ❓
+            </Button>
 
-
-          <Button type="button" size={"sm"} onClick={handleImportClick}>
-            Import Excel
-          </Button>
+            <Button type="button" size="sm" onClick={handleImportClick}>
+              Import Excel
+            </Button>
+          </div>
           <input
             type="file"
             accept=".xlsx, .xls"
@@ -346,9 +424,19 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
                     >
 
                       <Textarea
-                        className="w-full min-h-[60px] p-2 pr-6 pb-6 border rounded resize overflow-hidden relative"
+                        className="table-cell-editor w-full min-h-[60px] w-full min-h-[60px] p-2 pr-6 pb-6 border rounded resize overflow-hidden relative"
                         value={data?.[row]?.[col] || ""}
                         onChange={(e) => handleCellChange(row, col, e.target.value)}
+                        onFocus={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+
+                          setActiveCell({
+                            row,
+                            col,
+                            rect,
+                          });
+                          selectedCellRef.current = { row, col };
+                        }}
                         onKeyDown={(e) => e.stopPropagation()}
                       />
                     </TableCell>
@@ -372,6 +460,199 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
           </Table>
         </div>
       </form>
+      {activeCell?.rect && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="cell-toolbar fixed z-50 flex gap-2 bg-white shadow-lg border rounded-lg p-2"
+          style={{
+            top: activeCell.rect.top + window.scrollY - 45,
+            left: activeCell.rect.left + window.scrollX,
+          }}
+        >
+          <Button
+            size="sm"
+            onClick={() => insertTag("[checkbox]")}
+            title="Checkbox"
+          >
+            ☑
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={() => insertTag("[number:]")}
+            title="Number"
+          >
+            123
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={() => insertTag("[date:]")}
+            title="Date"
+          >
+            📅
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={() => insertTag("[camera]")}
+            title="Camera"
+          >
+            📸
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={() => {
+              setSelectCount(2);
+              setSelectOptions(["", ""]);
+              setSelectBuilderOpen(true);
+            }}
+            title="Select"
+          >
+            🔽
+          </Button>
+
+          <Button
+            size="sm"
+            type="button"
+            onClick={() => {
+              if (!activeCell) return;
+              setMergeBuilderOpen({ direction: "right", row: activeCell.row, col: activeCell.col });
+              setMergeCount(2);
+            }}
+            title="Merge Right"
+          >
+            ➡️
+          </Button>
+
+          <Button
+            size="sm"
+            type="button"
+            onClick={() => {
+              if (!activeCell) return;
+              setMergeBuilderOpen({ direction: "down", row: activeCell.row, col: activeCell.col });
+              setMergeCount(2);
+            }}
+            title="Merge Down"
+          >
+            ⬇️
+          </Button>
+          <Button size="sm" title="Summary" type="button" onClick={() => insertTag("[SUMMARY]")}>
+            📊
+          </Button>
+
+        </div>
+      )}
+      {selectBuilderOpen && (
+        <div className="cell-modal fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-[400px] space-y-4">
+
+            <h3 className="font-semibold text-lg">Create Dropdown</h3>
+
+            {/* How many options */}
+            <div>
+              <label className="text-sm">How many options?</label>
+              <Input
+                type="number"
+                min={1}
+                value={selectCount}
+                onChange={(e) => {
+                  const count = Number(e.target.value);
+                  setSelectCount(count);
+                  setSelectOptions(Array(count).fill(""));
+                }}
+              />
+            </div>
+
+            {/* Option inputs */}
+            <div className="space-y-2">
+              {Array.from({ length: selectCount }).map((_, i) => (
+                <Input
+                  key={i}
+                  placeholder={`Option ${i + 1}`}
+                  value={selectOptions[i] || ""}
+                  onChange={(e) => {
+                    const newOpts = [...selectOptions];
+                    newOpts[i] = e.target.value;
+                    setSelectOptions(newOpts);
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setSelectBuilderOpen(false)}>
+                Cancel
+              </Button>
+
+              <Button
+                onClick={() => {
+                  const cleaned = selectOptions.filter(Boolean);
+                  if (!cleaned.length) return;
+
+                  const tag = `[select:"":[${cleaned
+                    .map(o => `"${o}"`)
+                    .join(",")}]]`;
+
+                  insertTag(tag);
+                  setSelectBuilderOpen(false);
+                }}
+              >
+                Insert
+              </Button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {mergeBuilderOpen && activeCell?.row === mergeBuilderOpen.row && activeCell?.col === mergeBuilderOpen.col && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="cell-modal absolute z-50 bg-white border rounded-lg p-2 shadow-lg flex items-center gap-2"
+          style={{
+            top: activeCell.rect?.top! + window.scrollY - 45,
+            left: activeCell.rect?.left! + window.scrollX,
+          }}
+        >
+          <label className="text-sm">Merge {mergeBuilderOpen.direction}:</label>
+          <input
+            type="number"
+            min={2}
+            max={10}
+            value={mergeCount}
+            onChange={(e) => setMergeCount(Number(e.target.value))}
+            className="border rounded px-1 w-16"
+          />
+          <Button
+            size="sm"
+            onClick={() => {
+              if (!mergeBuilderOpen) return;
+              const { row, col, direction } = mergeBuilderOpen;
+              const tag = `[merge:${direction}:${mergeCount}]`;
+              const newData = [...data];
+              newData[row][col] = (newData[row][col] || "") + tag;
+
+              setData(newData);
+
+              updateElement(element.id, {
+                ...element,
+                extraAttributes: {
+                  ...element.extraAttributes,
+                  data: newData,
+                },
+              });
+
+              setMergeBuilderOpen(null);
+            }}
+          >
+            Insert
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setMergeBuilderOpen(null)}>Cancel</Button>
+        </div>
+      )}
     </Form>
   );
 }

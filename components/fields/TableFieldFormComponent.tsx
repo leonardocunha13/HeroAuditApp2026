@@ -141,14 +141,14 @@ export function FormComponent({
             className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
             onClick={() => setIsOpen(false)}
           >
-           <Image
-            src={src}
-            alt="Captured"
-            width={50}
-            height={50}
-            unoptimized
-            className="object-contain border rounded hover:ring-2 hover:ring-blue-500 transition"
-          />
+            <Image
+              src={src}
+              alt="Captured"
+              width={50}
+              height={50}
+              unoptimized
+              className="object-contain border rounded hover:ring-2 hover:ring-blue-500 transition"
+            />
           </div>
         )}
       </>
@@ -312,9 +312,16 @@ export function FormComponent({
                 const isNumber = rawContent.startsWith("[number");
                 const numberValue = isNumber ? rawContent.match(/^\[number:(.*?)\]$/)?.[1] ?? "" : "";
                 const isDate = rawContent.startsWith("[date:");
-                const dateValue = isDate ? rawContent.match(/^\[date:(.*?)\]$/)?.[1] ?? "" : "";
+                let dateValue: Date | null = null;
+                if (isDate) {
+                  const match = rawContent.match(/^\[date:(.*?)\]$/);
+                  if (match && match[1]) {
+                    const parsed = parseLocalDate(match[1]);
+                    dateValue = isNaN(parsed.getTime()) ? null : parsed;
+                  }
+                }
                 const isPassFailOrSummary = ["[PASS]", "[FAIL]", "[SUMMARY]"].includes(rawContent);
-                const isOnlyMergeTag = mergeMatch && content.trim() === "";
+                const isOnlyMergeTag = mergeMatch && rawContent.replace(/\s/g, "") === " ";
 
                 if (isSelect) {
                   try {
@@ -429,11 +436,13 @@ export function FormComponent({
                       )
                     ) : isDate ? (
                       <ReactDatePicker
-                        selected={dateValue ? parseLocalDate(dateValue) : null}
+                        selected={dateValue}
                         onChange={(date: Date | null) => {
                           if (date) {
                             const safeDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 12));
                             handleCellChange(row, col, `[date:${safeDate.toISOString().split("T")[0]}]`);
+                          } else {
+                            handleCellChange(row, col, "[date:]"); // empty
                           }
                         }}
                         disabled={readOnly}
