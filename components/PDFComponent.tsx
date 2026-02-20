@@ -2,7 +2,6 @@
 import { Document, Page, Text, View, StyleSheet, Image, Font } from "@react-pdf/renderer";
 import { FormElementInstance } from "./FormElements";
 import { renderHtmlToPDFElements } from "./converthtmlreact";
-import React from "react";
 const STAMP_SRC = "/Stamp.png";
 
 Font.register({
@@ -816,6 +815,28 @@ export default function PDFDocument({ elements, responses, formName, revision, o
     ? { width, height: "auto", objectFit: "contain", ...alignStyle }
     : { width, height, objectFit: "contain", ...alignStyle };
 
+  function buildRows(elements: FormElementInstance[]) {
+    const rows: FormElementInstance[][] = [];
+    let currentRow: FormElementInstance[] = [];
+    let currentWidth = 0;
+
+    elements.forEach(el => {
+      const width = el.width || 100;
+
+      if (currentWidth + width > 100) {
+        rows.push(currentRow);
+        currentRow = [];
+        currentWidth = 0;
+      }
+
+      currentRow.push(el);
+      currentWidth += width;
+    });
+
+    if (currentRow.length) rows.push(currentRow);
+
+    return rows;
+  }
   return (
     <Document>
       {elements.map((group, pageIndex) => (
@@ -853,54 +874,37 @@ export default function PDFDocument({ elements, responses, formName, revision, o
           </View>
 
           {/* Page Content */}
-          {group.map((element, index) => {
-            if (repeatablesInOrder.find(r => r.id === element.id)) return null;
+          {buildRows(group).map((row, rowIndex) => (
+            <View key={rowIndex} style={{ flexDirection: "row", width: "100%" }}>
+              {row.map((element) => {
+                if (repeatablesInOrder.find(r => r.id === element.id)) return null;
 
-            const nextElement = group[index + 1];
-            const isTitleFollowedByParagraph =
-              element.type === "TitleField" &&
-              ["ParagraphField", "TableField", "ImageField"].includes(nextElement?.type);
+                const value = responses[element.id];
+                const width = element.width || 100;
 
-            if (isTitleFollowedByParagraph) {
-              const titleValue = responses[element.id];
-              const nextValue = responses[nextElement.id];
+                return (
+                  <View
+                    key={element.id}
+                    style={{
+                      width: `${width}%`,
+                      paddingRight: 6,
+                      marginBottom: 6,
+                    }}
+                  >
+                    {element.type !== "SeparatorField" &&
+                      element.type !== "CheckboxField" && (
+                        <Text style={styles.fieldTitle}>
+                          {element.extraAttributes?.label}
+                        </Text>
+                      )}
 
-              return (
-                <React.Fragment key={`combo-${element.id}-${nextElement.id}`}>
-                  {/* Title (safe to keep together) */}
-                  <View key={`title-${element.id}`} style={styles.fieldContainer} wrap={false}>
-                    <Text style={styles.fieldTitle}>{element.extraAttributes?.label}</Text>
-                    {renderFieldValue(element, titleValue)}
+                    {renderFieldValue(element, value)}
                   </View>
+                );
+              })}
+            </View>
+          ))}
 
-                  {/* Content (MUST be allowed to wrap) */}
-                  <View key={`content-${nextElement.id}`} style={styles.fieldContainer}>
-                    <Text style={styles.fieldTitle}>{nextElement.extraAttributes?.label}</Text>
-                    {renderFieldValue(nextElement, nextValue)}
-                  </View>
-                </React.Fragment>
-              );
-            }
-
-            if (
-              index > 0 &&
-              group[index - 1].type === "TitleField" &&
-              ["ParagraphField", "TableField", "ImageField"].includes(element.type)
-            ) {
-              return null;
-            }
-
-            const value = responses[element.id];
-
-            return (
-              <View key={element.id} style={styles.fieldContainer}>
-                {element.type !== "SeparatorField" && element.type !== "CheckboxField" && (
-                  <Text style={styles.fieldTitle}>{element.extraAttributes?.label}</Text>
-                )}
-                {renderFieldValue(element, value)}
-              </View>
-            );
-          })}
           {/* Stamp overlay: must come AFTER all content */}
           {pageIndex === 0 && stamp && (
             <View

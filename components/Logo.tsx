@@ -6,7 +6,7 @@ function Logo() {
   const router = useRouter();
 
   const handleClick = () => {
-    router.push("/"); // Navega normalmente sem forçar estado de loading
+    router.push("/");
   };
 
   return (

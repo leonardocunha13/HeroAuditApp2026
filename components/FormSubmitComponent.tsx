@@ -299,7 +299,28 @@ function FormSubmitComponent({ formUrl, content }: { content: FormElementInstanc
       </div>
     );
   }
+  function buildRows(elements: FormElementInstance[]) {
+    const rows: FormElementInstance[][] = [];
+    let currentRow: FormElementInstance[] = [];
+    let currentWidth = 0;
 
+    elements.forEach(el => {
+      const width = el.width || 100;
+
+      if (currentWidth + width > 100) {
+        rows.push(currentRow);
+        currentRow = [];
+        currentWidth = 0;
+      }
+
+      currentRow.push(el);
+      currentWidth += width;
+    });
+
+    if (currentRow.length) rows.push(currentRow);
+
+    return rows;
+  }
   return (
     <div className="flex justify-center w-full h-full items-center p-8">
       {/* Top action bar */}
@@ -346,18 +367,27 @@ function FormSubmitComponent({ formUrl, content }: { content: FormElementInstanc
         key={renderKey}
         className="flex flex-col gap-4 flex-grow bg-background w-full h-full p-8 overflow-y-auto border shadow-xl shadow-blue-700 rounded"
       >
-        {content.map((element) => {
-          const FormElement = FormElements[element.type].formComponent;
-          return (
-            <FormElement
-              key={element.id}
-              elementInstance={element}
-              submitValue={submitValue}
-              isInvalid={formErrors.current[element.id]}
-              defaultValue={formValues.current[element.id]}
-            />
-          );
-        })}
+        {buildRows(content).map((row, rowIndex) => (
+          <div key={rowIndex} className="flex w-full gap-4">
+            {row.map((element) => {
+              const FormElement = FormElements[element.type].formComponent;
+
+              return (
+                <div
+                  key={element.id}
+                  style={{ width: `${element.width || 100}%` }}
+                >
+                  <FormElement
+                    elementInstance={element}
+                    submitValue={submitValue}
+                    isInvalid={formErrors.current[element.id]}
+                    defaultValue={formValues.current[element.id]}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );

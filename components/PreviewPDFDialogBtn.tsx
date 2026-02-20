@@ -63,7 +63,7 @@ function PreviewPDFDialogBtn({ id, formName, revision }: { id: string; formName:
 
     const blob = await pdf(
       <PDFDocument
-        elements={resolvedGroups} // já resolvido!
+        elements={resolvedGroups} 
         responses={{}}
         formName={formName || "Unknown Document Number"}
         revision={revision}

@@ -93,7 +93,7 @@ export type FormElementInstance = {
   extraAttributes?: TextFieldExtraAttributes;
   label: string;
   height?: number;
-  widht?: number;
+  width?: number;
 };
 
 type FormElementsType = {
@@ -114,6 +114,5 @@ export const FormElements: FormElementsType = {
   ImageField: ImageFieldFormElement,
   PageBreakField: PageBreakFieldFormElement,
   CameraField: CameraFieldFormElement,
-
 };
 

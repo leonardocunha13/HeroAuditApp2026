@@ -14,18 +14,25 @@ try {
 }
 
   return (
-    <div className="bg-accent flex flex-col flex-grow items-center justify-center p-4 bg-[url(/paper.svg)] dark:bg-[url(/paper-dark.svg)] overflow-y-auto">
-          <div className="max-w-[1500px] flex flex-col gap-4 flex-grow bg-background w-full h-full rounded-2xl p-8 overflow-y-auto">
-      {elements.length === 0 ? (
-        <p>It's empty or invalid.</p>
-      ) : (
-        elements.map((element) => {
-          const FormComponent = FormElements[element.type].formComponent;
-          return <FormComponent key={element.id} elementInstance={element} />;
-        })
-      )}
-    </div>
-    </div>
+        <div className="bg-accent flex flex-col flex-grow items-center p-4 bg-[url(/paper.svg)] dark:bg-[url(/paper-dark.svg)] overflow-y-auto">
+          <div className="max-w-[1500px] flex flex-wrap w-full gap-4 p-8 bg-background rounded-2xl content-start">
+            {elements.map((element) => {
+              const FormComponent = FormElements[element.type].formComponent;
+
+              return (
+                <div
+                  key={element.id}
+                  className="flex-none"
+                  style={{
+                    width: `calc(${element.width || 100}% - 1rem)`,
+                  }}
+                >
+                  <FormComponent elementInstance={element} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
   );
 }
 

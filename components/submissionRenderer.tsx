@@ -447,7 +447,28 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
        setLoading(false);
      }
    };*/
+  function buildRows(elements: FormElementInstance[]) {
+    const rows: FormElementInstance[][] = [];
+    let currentRow: FormElementInstance[] = [];
+    let currentWidth = 0;
 
+    elements.forEach(el => {
+      const width = el.width || 100;
+
+      if (currentWidth + width > 100) {
+        rows.push(currentRow);
+        currentRow = [];
+        currentWidth = 0;
+      }
+
+      currentRow.push(el);
+      currentWidth += width;
+    });
+
+    if (currentRow.length) rows.push(currentRow);
+
+    return rows;
+  }
   return (
     <div className="flex flex-col items-center w-full h-full">
       {/* Top Bar */}
@@ -778,32 +799,44 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
         style={{ paddingTop: "94px", maxHeight: "100vh" }}
       >
 
-        {pageGroups.map((group, idx) => (
-          <div key={idx} className="pdf-page mb-8">
-            {group
-              .filter((el) => {
-                const shouldRepeat = el.extraAttributes?.repeatOnPageBreak === true;
-                return idx === 0 || !shouldRepeat;
-              })
-              .map((element) => {
-                const FormComponent = FormElements[element.type].formComponent;
-                const rawValue = responses[element.id];
-                const value = typeof rawValue === "string" ? rawValue : undefined;
+        {pageGroups.map((group, idx) => {
+          const visibleElements = group.filter((el) => {
+            const shouldRepeat = el.extraAttributes?.repeatOnPageBreak === true;
+            return idx === 0 || !shouldRepeat;
+          });
 
-                return (
-                  <div key={element.id}>
-                    <FormComponent
-                      elementInstance={element}
-                      defaultValue={value}
-                      isInvalid={false}
-                      submitValue={() => { }}
-                      readOnly={true}
-                    />
-                  </div>
-                );
-              })}
-          </div>
-        ))}
+          const rows = buildRows(visibleElements);
+
+          return (
+            <div key={idx} className="pdf-page mb-8 space-y-4">
+              {rows.map((row, rowIndex) => (
+                <div key={rowIndex} className="flex w-full gap-4">
+                  {row.map((element) => {
+                    const FormComponent = FormElements[element.type].formComponent;
+                    const rawValue = responses[element.id];
+                    const value = typeof rawValue === "string" ? rawValue : undefined;
+
+                    return (
+                      <div
+                        key={element.id}
+                        style={{ width: `calc(${element.width || 100}% - 1rem)` }}
+                      >
+                        <FormComponent
+                          elementInstance={element}
+                          defaultValue={value}
+                          isInvalid={false}
+                          submitValue={() => { }}
+                          readOnly={true}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+
       </div>
     </div>
   );
