@@ -21,7 +21,7 @@ import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 
 function Designer() {
-  const { elements, addElement, selectedElement, setSelectedElement, removeElement, setElements } = useDesigner();
+  const { elements, addElement, selectedElement, setSelectedElement, setElements } = useDesigner();
 
   const droppable = useDroppable({
     id: "designer-drop-area",
@@ -48,6 +48,7 @@ function Designer() {
         const type = active.data?.current?.type;
         const newElement = FormElements[type as ElementsType].construct(idGenerator());
         newElement.width = 100;
+        newElement.height = newElement.height || 120;
         addElement(elements.length, newElement);
         return;
       }
@@ -129,29 +130,83 @@ function Designer() {
         const activeId = active.data?.current?.elementId;
         const overId = over.data?.current?.elementId;
 
-        const activeElementIndex = elements.findIndex((el) => el.id === activeId);
+        const activeIndex = elements.findIndex(el => el.id === activeId);
+        const overIndex = elements.findIndex(el => el.id === overId);
 
-        const overElementIndex = elements.findIndex((el) => el.id === overId);
+        if (activeIndex === -1 || overIndex === -1) return;
 
-        if (activeElementIndex === -1 || overElementIndex === -1) {
-          throw new Error("element not found");
+        const updated = [...elements];
+        const dragged = { ...updated[activeIndex] };
+
+        // FIX 1️⃣ — restore width when moving vertically
+        dragged.width = 100;
+
+        // FIX 2️⃣ — restore width of its old neighbor if it had one
+        const prev = updated[activeIndex - 1];
+        const next = updated[activeIndex + 1];
+
+        if (dragged.width === 50) {
+          if (prev && prev.width === 50) {
+            prev.width = 100;
+          }
+          if (next && next.width === 50) {
+            next.width = 100;
+          }
         }
 
-        const activeElement = { ...elements[activeElementIndex] };
-        removeElement(activeId);
+        // remove dragged
+        updated.splice(activeIndex, 1);
 
-        let indexForNewElement = overElementIndex; // i assume i'm on top-half
+        let insertIndex = activeIndex < overIndex ? overIndex - 1 : overIndex;
+
         if (isDroppingOverDesignerElementBottomHalf) {
-          indexForNewElement = overElementIndex + 1;
+          insertIndex++;
         }
 
-        addElement(indexForNewElement, activeElement);
+        updated.splice(insertIndex, 0, dragged);
+
+        setElements(updated);
+        return;
+      }
+      const isDraggingExisting = active.data?.current?.isDesignerElement;
+
+      if (isDraggingExisting && (isLeftZone || isRightZone)) {
+        const activeId = active.data?.current?.elementId;
+        const overId = over.data?.current?.elementId;
+
+        const activeIndex = elements.findIndex(el => el.id === activeId);
+        const overIndex = elements.findIndex(el => el.id === overId);
+
+        if (activeIndex === -1 || overIndex === -1) return;
+
+        const updated = [...elements];
+
+        const dragged = { ...updated[activeIndex] };
+
+        // remove dragged first
+        updated.splice(activeIndex, 1);
+
+        // shrink both elements
+        dragged.width = 50;
+        updated[overIndex] = {
+          ...updated[overIndex],
+          width: 50,
+        };
+
+        let insertIndex = activeIndex < overIndex ? overIndex - 1 : overIndex;
+
+        if (isRightZone) insertIndex = overIndex + 1;
+
+        updated.splice(insertIndex, 0, dragged);
+
+        setElements(updated);
+        return;
       }
     },
   });
 
   return (
-    <div className="flex w-full h-full">
+    <div className="flex w-full items-start h-full">
       <div
         className="p-4 w-full"
         onClick={() => {
@@ -161,24 +216,31 @@ function Designer() {
         <div
           ref={droppable.setNodeRef}
           className={cn(
-            "bg-background max-w-[1500px] h-full m-auto rounded-xl flex flex-col flex-grow items-center justify-start flex-1 overflow-y-auto",
-            droppable.isOver && "ring-4 ring-primary ring-inset",
+            "max-w-[1500px] min-h-[500px] h-full m-auto rounded-xl flex flex-col flex-grow items-center justify-start flex-1 overflow-y-auto p-6 transition-shadow duration-200",
+            "bg-white dark:bg-gray-800",
+            // subtle glow normally
+            "shadow-lg shadow-[#facc15]/50",
+            // outline all around the container
+            "ring-2 ring-[#facc15] ring-inset",
+            droppable.isOver && "ring-4 ring-[#facc15] ring-inset shadow-[0_0_20px_#facc15]"
           )}
         >
           {!droppable.isOver && elements.length === 0 && (
-            <p className="text-3xl text-muted-foreground flex flex-grow items-center font-bold">Drop here</p>
+            <div className="flex flex-grow w-full h-full items-center justify-center">
+              <p className="text-3xl text-muted-foreground font-bold">
+                Drop here
+              </p>
+            </div>
           )}
 
           {droppable.isOver && elements.length === 0 && (
             <div className="p-4 w-full">
-              <div className="h-[300px] rounded-md bg-primary/20"></div>
+              <div className="h-[300px] rounded-md bg-[#facc15]/20 dark:bg-[#facc15]/30 shadow-inner animate-pulse" />
             </div>
           )}
+
           {elements.length > 0 && (
-            <div
-              className="flex flex-wrap w-full gap-4 p-4 items-start content-start"
-              data-designer-container
-            >
+            <div className="flex flex-wrap w-full gap-4 p-4 items-start content-start" data-designer-container>
               {elements.map((element) => (
                 <DesignerElementWrapper key={element.id} element={element} />
               ))}
@@ -187,7 +249,6 @@ function Designer() {
         </div>
       </div>
       <DesignerSidebar />
-
     </div>
   );
 }
@@ -250,10 +311,11 @@ function DesignerElementWrapper({ element }: { element: FormElementInstance }) {
       {...draggable.listeners}
       {...draggable.attributes}
       className={cn(
-        "relative flex flex-none shrink-0 text-foreground hover:cursor-pointer rounded-md ring-1 ring-accent ring-inset"
+        "relative flex flex-none shrink-0 text-foreground hover:cursor-pointer rounded-md ring-1 ring-accent ring-inset",
       )}
       style={{
         width: `calc(${element.width || 100}% - 1rem)`,
+        minHeight: element.height || 120,
       }}
 
       onMouseEnter={() => {
@@ -316,6 +378,7 @@ function DesignerElementWrapper({ element }: { element: FormElementInstance }) {
                 const clonedElement = {
                   ...element,
                   id: idGenerator(),
+                  height: element.height || 120,
                 };
                 const currentIndex = elements.findIndex(el => el.id === element.id);
                 addElement(currentIndex + 1, clonedElement);
@@ -361,22 +424,26 @@ function DesignerElementWrapper({ element }: { element: FormElementInstance }) {
           </div>
         </>
       )}
-      {topHalf.isOver && <div className="absolute top-0 w-full rounded-md h-[7px] bg-primary rounded-b-none" />}
+      {topHalf.isOver && (
+        <div className="absolute top-0 w-full h-[6px] bg-[#facc15] rounded-b shadow-lg" />
+      )}
       <div
         className={cn(
-          "flex w-full items-start rounded-md bg-accent/40 px-4 py-2 pointer-events-none opacity-100",
+          "flex w-full items-start rounded-md px-4 py-2 pointer-events-none transition-all duration-200",
+          "bg-gray-100 dark:bg-gray-700",
           mouseIsOver && "opacity-30"
         )}
       >
         <DesignerElement elementInstance={element} />
       </div>
-      {bottomHalf.isOver && <div className="absolute bottom-0 w-full rounded-md h-[7px] bg-primary rounded-t-none" />}
-      {leftZone.isOver && (
-        <div className="absolute left-0 top-0 h-full w-2 bg-primary" />
+      {bottomHalf.isOver && (
+        <div className="absolute bottom-0 w-full h-[6px] bg-[#facc15] rounded-t shadow-lg" />
       )}
-
+      {leftZone.isOver && (
+        <div className="absolute left-0 top-0 h-full w-2 bg-[#facc15] shadow-lg" />
+      )}
       {rightZone.isOver && (
-        <div className="absolute right-0 top-0 h-full w-2 bg-primary" />
+        <div className="absolute right-0 top-0 h-full w-2 bg-[#facc15] shadow-lg" />
       )}
     </div>
   );

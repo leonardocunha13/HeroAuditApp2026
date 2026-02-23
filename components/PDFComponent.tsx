@@ -839,22 +839,34 @@ export default function PDFDocument({ elements, responses, formName, revision, o
   }
   return (
     <Document>
-      {elements.map((group, pageIndex) => (
+      {elements.map((group, pageIndex) =>
         <Page key={pageIndex} style={styles.page} wrap orientation={orientation || "portrait"} size={pageSize || "A3"}>
           {/* Header */}
           <View fixed style={styles.header}>
-            {repeatablesInOrder.map((el) => {
-              if (el.type === "ImageField") {
-                return (
-                  <Image key={el.id} src={el.extraAttributes?.imageUrl} style={imageStyle} />
-                );
-              }
-              return (
-                <View key={`header-el-${el.id}`}>
-                  {renderFieldValue(el, responses[el.id])}
-                </View>
-              );
-            })}
+            {buildRows(repeatablesInOrder).map((row, rowIndex) => (
+              <View key={rowIndex} style={{ flexDirection: "row", width: "100%" }}>
+                {row.map((el) => {
+                  const width = el.width || 100;
+                  const value = responses[el.id];
+
+                  return (
+                    <View
+                      key={el.id}
+                      style={{
+                        width: `${width}%`,
+                        paddingRight: 6,
+                      }}
+                    >
+                      {el.type === "ImageField" ? (
+                        <Image src={el.extraAttributes?.imageUrl} style={imageStyle} />
+                      ) : (
+                        renderFieldValue(el, value)
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            ))}
           </View>
           {/* Header */}
 
@@ -874,36 +886,42 @@ export default function PDFDocument({ elements, responses, formName, revision, o
           </View>
 
           {/* Page Content */}
-          {buildRows(group).map((row, rowIndex) => (
-            <View key={rowIndex} style={{ flexDirection: "row", width: "100%" }}>
-              {row.map((element) => {
-                if (repeatablesInOrder.find(r => r.id === element.id)) return null;
+          {(() => {
+            const contentElements = group.filter(
+              el => !repeatablesInOrder.some(r => r.id === el.id)
+            );
 
-                const value = responses[element.id];
-                const width = element.width || 100;
+            return buildRows(contentElements).map((row, rowIndex) => (
+              <View key={rowIndex} style={{ flexDirection: "row", width: "100%" }}>
+                {row.map((element) => {
+                  const value = responses[element.id];
+                  const width = element.width || 100;
 
-                return (
-                  <View
-                    key={element.id}
-                    style={{
-                      width: `${width}%`,
-                      paddingRight: 6,
-                      marginBottom: 6,
-                    }}
-                  >
-                    {element.type !== "SeparatorField" &&
-                      element.type !== "CheckboxField" && (
-                        <Text style={styles.fieldTitle}>
-                          {element.extraAttributes?.label}
-                        </Text>
-                      )}
+                  return (
+                    <View
+                      key={element.id}
+                      style={{
+                        width: `${width}%`,
+                        paddingRight: 6,
+                        marginBottom: 6,
+                      }}
+                    >
+                      {element.type !== "SeparatorField" &&
+                        element.type !== "CheckboxField" && (
+                          <Text style={styles.fieldTitle}>
+                            {element.extraAttributes?.label}
+                          </Text>
+                        )}
 
-                    {renderFieldValue(element, value)}
-                  </View>
-                );
-              })}
-            </View>
-          ))}
+                      {renderFieldValue(element, value)}
+                    </View>
+                  );
+                })}
+              </View>
+            ));
+          })()}
+
+
 
           {/* Stamp overlay: must come AFTER all content */}
           {pageIndex === 0 && stamp && (
@@ -938,7 +956,7 @@ export default function PDFDocument({ elements, responses, formName, revision, o
           )}
 
         </Page>
-      ))}
+      )}
     </Document>
   );
 }

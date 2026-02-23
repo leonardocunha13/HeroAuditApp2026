@@ -7,7 +7,10 @@ function FormElementsSidebar() {
   const { tokens } = useTheme();
 
   return (
-    <View >
+    <View 
+     style={{
+        position: "fixed",   // completely fixed
+      }}>
       <Text className="text-sm text-gray-900 dark:text-gray-100" fontWeight="bold">
         Drag and drop elements
       </Text>

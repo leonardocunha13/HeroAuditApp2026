@@ -237,7 +237,8 @@ export function FormComponent({
   return (
     <div>
       <p className="font-medium mb-2">{label}</p>
-      <Table className="border-2 border-gray-700 border-collapse w-full">
+      <Table className="border-2 border-gray-700 border-collapse w-full"
+      style={{ tableLayout: "auto" }}>
         <TableHeader>
           <TableRow>
             {(() => {
@@ -259,7 +260,7 @@ export function FormComponent({
                   <TableHead
                     key={col}
                     colSpan={span}
-                    className="break-words text-left align-top border-2 border-gray-700 border-collapse w-full"
+                    className="break-words text-left align-top border-2 border-gray-700 border-collapse"
                     style={{
                       minWidth: "50px",
                       whiteSpace: "pre-wrap",
@@ -339,7 +340,7 @@ export function FormComponent({
                   }
                 }
                 return (
-                  <TableCell key={col} rowSpan={rowSpan} colSpan={colSpan} className="border-2 border-gray-700 border-collapse w-full justify-center items-center table-cell-wrap break-words whitespace-normal">
+                  <TableCell key={col} rowSpan={rowSpan} colSpan={colSpan} className="border-2 border-gray-700 border-collapse justify-center items-center table-cell-wrap break-words whitespace-normal">
                     {isCheckbox ? (
                       <div
                         onClick={() => {

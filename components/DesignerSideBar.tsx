@@ -7,15 +7,15 @@ function DesignerSidebar() {
   const { selectedElement } = useDesigner();
   const { tokens } = useTheme();
 
+  // Set width depending on state
+  const sidebarWidth = selectedElement ? "50%" : "10%"; // wider for properties
+
   return (
     <View
-      width="100%"
-      height="100%"
-      overflow="auto"
-      padding={tokens.space.medium}
-      
-      style={{ borderLeft: `1px solid ${tokens.colors.border.primary}` }}
+      width={sidebarWidth}
 
+      padding={tokens.space.medium}
+      style={{ borderLeft: `1px solid ${tokens.colors.border.primary}`, height: "100vh", transition: "width 0.3s ease", }}
     >
       {!selectedElement && <FormElementsSidebar />}
       {selectedElement && <PropertiesFormSidebar />}
