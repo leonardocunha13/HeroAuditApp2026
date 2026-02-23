@@ -43,7 +43,7 @@ function Designer() {
 
       const droppingSidebarBtnOverDesignerDropArea = isDesignerBtnElement && isDroppingOverDesignerDropArea;
 
-      // First scenario
+      // First scenario //empty state — dropping from sidebar into the designer with no existing elements
       if (droppingSidebarBtnOverDesignerDropArea) {
         const type = active.data?.current?.type;
         const newElement = FormElements[type as ElementsType].construct(idGenerator());
@@ -60,40 +60,61 @@ function Designer() {
       const isDroppingOverDesignerElement =
         isDroppingOverDesignerElementTopHalf || isDroppingOverDesignerElementBottomHalf;
 
-      const droppingSidebarBtnOverDesignerElement = isDesignerBtnElement && isDroppingOverDesignerElement;
-
-      // Second scenario — dropping beside an element
-      if (droppingSidebarBtnOverDesignerElement) {
+      // vertical insert (top/bottom)
+      if (isDesignerBtnElement && isDroppingOverDesignerElement) {
         const type = active.data?.current?.type;
         const newElement = FormElements[type as ElementsType].construct(idGenerator());
 
         const overId = over.data?.current?.elementId;
         const overIndex = elements.findIndex(el => el.id === overId);
-        if (overIndex === -1) throw new Error("element not found");
 
         const updated = [...elements];
 
-        // shrink existing element
-        updated[overIndex] = {
-          ...updated[overIndex],
-          width: 50,
-        };
-
-        // new element also 50%
-        newElement.width = 50;
+        newElement.width = 100;
 
         let insertIndex = overIndex;
+
         if (isDroppingOverDesignerElementBottomHalf) {
           insertIndex = overIndex + 1;
         }
 
         updated.splice(insertIndex, 0, newElement);
-
         setElements(updated);
         return;
       }
 
+      // horizontal insert (left/right)
       if (isDesignerBtnElement && (isLeftZone || isRightZone)) {
+        const type = active.data?.current?.type;
+        const newElement = FormElements[type as ElementsType].construct(idGenerator());
+
+        const overId = over.data?.current?.elementId;
+        const overIndex = elements.findIndex(el => el.id === overId);
+
+        const updated = [...elements];
+
+        updated[overIndex] = {
+          ...updated[overIndex],
+          width: 50,
+        };
+
+        newElement.width = 50;
+
+        let insertIndex = overIndex;
+
+        if (isRightZone) insertIndex = overIndex + 1;
+
+        updated.splice(insertIndex, 0, newElement);
+        setElements(updated);
+        return;
+      }
+
+      if (
+        isDesignerBtnElement &&
+        (isLeftZone || isRightZone) &&
+        !isDroppingOverDesignerElementTopHalf &&
+        !isDroppingOverDesignerElementBottomHalf
+      ) {
         const type = active.data?.current?.type;
         const newElement = FormElements[type as ElementsType].construct(idGenerator());
 
@@ -138,17 +159,21 @@ function Designer() {
         const updated = [...elements];
         const dragged = { ...updated[activeIndex] };
 
-        // FIX 1️⃣ — restore width when moving vertically
+        // remember original width BEFORE changing
+        const wasHalfWidth = dragged.width === 50;
+
+        // restore dragged width (it becomes full in new row)
         dragged.width = 100;
 
-        // FIX 2️⃣ — restore width of its old neighbor if it had one
-        const prev = updated[activeIndex - 1];
-        const next = updated[activeIndex + 1];
+        // FIX: restore neighbor if it was side-by-side
+        if (wasHalfWidth) {
+          const prev = updated[activeIndex - 1];
+          const next = updated[activeIndex + 1];
 
-        if (dragged.width === 50) {
           if (prev && prev.width === 50) {
             prev.width = 100;
           }
+
           if (next && next.width === 50) {
             next.width = 100;
           }
@@ -170,7 +195,12 @@ function Designer() {
       }
       const isDraggingExisting = active.data?.current?.isDesignerElement;
 
-      if (isDraggingExisting && (isLeftZone || isRightZone)) {
+      if (
+        isDraggingExisting &&
+        (isLeftZone || isRightZone) &&
+        !isDroppingOverDesignerElementTopHalf &&
+        !isDroppingOverDesignerElementBottomHalf
+      ) {
         const activeId = active.data?.current?.elementId;
         const overId = over.data?.current?.elementId;
 
@@ -395,20 +425,27 @@ function DesignerElementWrapper({ element }: { element: FormElementInstance }) {
                 e.stopPropagation();
 
                 const index = elements.findIndex(el => el.id === element.id);
-                const prev = elements[index - 1];
-                const next = elements[index + 1];
 
+                const isHalfWidth = element.width === 50;
+
+                // remove element first
                 let updated = elements.filter(el => el.id !== element.id);
 
-                // if it was part of a side-by-side pair, expand the remaining neighbor
-                if (element.width === 50) {
-                  if (prev && prev.width === 50) {
+                if (isHalfWidth) {
+                  // find neighbor AFTER removal
+                  const leftNeighbor = updated[index - 1];
+                  const rightNeighbor = updated[index];
+
+                  // restore whichever exists and is half width
+                  if (leftNeighbor && leftNeighbor.width === 50) {
                     updated = updated.map(el =>
-                      el.id === prev.id ? { ...el, width: 100 } : el
+                      el.id === leftNeighbor.id ? { ...el, width: 100 } : el
                     );
-                  } else if (next && next.width === 50) {
+                  }
+
+                  if (rightNeighbor && rightNeighbor.width === 50) {
                     updated = updated.map(el =>
-                      el.id === next.id ? { ...el, width: 100 } : el
+                      el.id === rightNeighbor.id ? { ...el, width: 100 } : el
                     );
                   }
                 }
