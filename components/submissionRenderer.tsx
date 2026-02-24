@@ -814,7 +814,10 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                   {row.map((element) => {
                     const FormComponent = FormElements[element.type].formComponent;
                     const rawValue = responses[element.id];
-                    const value = typeof rawValue === "string" ? rawValue : undefined;
+                    const value =
+                      rawValue !== undefined && rawValue !== null
+                        ? String(rawValue)
+                        : undefined;
 
                     return (
                       <div

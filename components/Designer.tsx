@@ -22,7 +22,7 @@ import { Button } from "./ui/button";
 
 function Designer() {
   const { elements, addElement, selectedElement, setSelectedElement, setElements } = useDesigner();
-
+  
   const droppable = useDroppable({
     id: "designer-drop-area",
     data: {

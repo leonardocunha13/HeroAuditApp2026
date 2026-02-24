@@ -753,19 +753,21 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
         </View>
       );
     }
-    /*case "TextField": {
-      const cleanText =
-        typeof value === "string" ? value.trim() : "";
+    case "CalculationField": {
+      const displayValue =
+        value !== undefined && value !== null && value !== ""
+          ? String(value)
+          : "-";
 
       return (
-        <View style={{ padding: 2, borderWidth: 1, borderRadius: 4 }}>
-          <Text style={{ fontSize: 10 }}>
-            {cleanText || "-"}
+        <View style={{ padding: 2, borderWidth: 1, borderRadius: 4 }} wrap={false}>
+          <Text style={{ fontSize: 10, fontWeight: "bold" }}>
+            {displayValue}
           </Text>
         </View>
       );
-    }*/
-
+    }
+    
     case "CameraField": {
       const imageUrl = typeof value === "string" ? value : element.extraAttributes?.content;
       if (!imageUrl) return <Text>[No image]</Text>;

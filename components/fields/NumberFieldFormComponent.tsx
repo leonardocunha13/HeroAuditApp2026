@@ -9,6 +9,7 @@ import { Input } from "../ui/input";
 import { Label } from "../../components/ui/label";
 import { cn } from "../../lib/utils";
 import { CustomInstance, NumberFieldFormElement } from "./NumberField";
+import { formValueStore } from "../formValueStore";
 
 export function FormComponent({
   elementInstance,
@@ -26,7 +27,6 @@ export function FormComponent({
   pdf?: boolean;
 }) {
   const element = elementInstance as CustomInstance;
-
   const [value, setValue] = useState(defaultValue || "");
   const [error, setError] = useState(false);
 
@@ -47,7 +47,7 @@ export function FormComponent({
       </div>
     );
   }
-  
+
   return (
     <div className="flex flex-col gap-2 w-full">
       <Label className={cn(error && "text-red-500")}>
@@ -58,7 +58,14 @@ export function FormComponent({
         type="number"
         className={cn(error && "border-red-500")}
         placeholder={placeHolder}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => {
+          const newValue = e.target.value;
+          setValue(newValue);
+          formValueStore.setValue(element.id, newValue);
+          if (submitValue) {
+            submitValue(element.id, newValue || "0");;
+          }
+        }}
         onBlur={(e) => {
           if (!submitValue) return;
           const valid = NumberFieldFormElement.validate(
