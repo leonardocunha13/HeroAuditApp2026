@@ -7,14 +7,10 @@ function FormElementsSidebar() {
   const { tokens } = useTheme();
 
   return (
-    <View 
-     style={{
-        position: "fixed",   // completely fixed
-      }}>
+    <View>
       <Text className="text-sm text-gray-900 dark:text-gray-100" fontWeight="bold">
         Drag and drop elements
       </Text>
-
 
       <Separator />
 
@@ -25,11 +21,10 @@ function FormElementsSidebar() {
         alignItems="start"
         width="80%"
         height="100%"
-
       >
+
         <Text
           fontSize={tokens.fontSizes.small}
-          
           fontWeight="bold"
           marginTop={tokens.space.small}
           style={{ gridColumn: "span 2" }}
@@ -47,7 +42,6 @@ function FormElementsSidebar() {
 
         <Text
           fontSize={tokens.fontSizes.small}
-          
           fontWeight="bold"
           marginTop={tokens.space.small}
           style={{ gridColumn: "span 2", }}

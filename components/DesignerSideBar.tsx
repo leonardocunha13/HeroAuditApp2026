@@ -15,7 +15,14 @@ function DesignerSidebar() {
       width={sidebarWidth}
 
       padding={tokens.space.medium}
-      style={{ borderLeft: `1px solid ${tokens.colors.border.primary}`, height: "100vh", transition: "width 0.3s ease", }}
+      style={{
+        borderLeft: `1px solid ${tokens.colors.border.primary}`,
+        position: "sticky",
+        top: 0,                 // ⭐ REQUIRED
+        height: "100vh",
+        overflowY: "auto",      // ⭐ allows internal scrolling
+        transition: "width 0.3s ease",
+      }}
     >
       {!selectedElement && <FormElementsSidebar />}
       {selectedElement && <PropertiesFormSidebar />}

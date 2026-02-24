@@ -219,7 +219,7 @@ function FormBuilder({ formID, form, equipmentName, clientName, formName, revisi
                         <PublishFormBtn id={formID} />
                     </div>
                 </nav>
-                <div className="flex w-full flex-grow items-center justify-center relative overflow-y-auto h-[200px] bg-accent bg-[url(/paper.svg)] dark:bg-[url(/paper-dark.svg)]">
+                <div className="flex w-full flex-grow relative min-h-0 bg-accent bg-[url(/paper.svg)] dark:bg-[url(/paper-dark.svg)]">
                     <Designer />
                 </div>
             </main>
