@@ -18,10 +18,11 @@ function evaluateFormula(formula: string, values: Record<string, string>) {
     expression = expression.replaceAll(`{${id}}`, numeric.toString());
   });
 
+  expression = expression
+    .replace(/\band\b/gi, "&&")
+    .replace(/\bor\b/gi, "||");
+
   try {
-    // Define helper functions:
-    // deg(x) converts degrees → radians
-    // rad(x) converts radians → degrees
     return String(
       Function(
         "deg",
