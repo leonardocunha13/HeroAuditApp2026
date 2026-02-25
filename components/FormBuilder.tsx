@@ -75,16 +75,19 @@ function FormBuilder({ formID, form, equipmentName, clientName, formName, revisi
             e.returnValue = '';
         };
 
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === 'hidden') saveProgress();
+        const handlePopState = async (event: PopStateEvent) => {
+            event.preventDefault();
+            await saveProgress();
+            window.history.back();
         };
 
         window.addEventListener('beforeunload', handleBeforeUnload);
-        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.history.pushState(null, '', window.location.href);
+        window.addEventListener('popstate', handlePopState);
 
         return () => {
             window.removeEventListener('beforeunload', handleBeforeUnload);
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('popstate', handlePopState);
         };
     }, [saveProgress]);
 
@@ -97,43 +100,7 @@ function FormBuilder({ formID, form, equipmentName, clientName, formName, revisi
             return () => clearTimeout(readyTimeout);
         }
     }, [form, setElements, isReady, setSelectedElement]);
-    useEffect(() => {
-        const handlePopState = async (event: PopStateEvent) => {
-            event.preventDefault();
-
-            await saveProgress();
-
-            // allow navigation AFTER saving
-            window.history.back();
-        };
-
-        // push a fake state so back button triggers popstate
-        window.history.pushState(null, "", window.location.href);
-        window.addEventListener("popstate", handlePopState);
-
-        return () => {
-            window.removeEventListener("popstate", handlePopState);
-        };
-    }, [saveProgress]);
-    useEffect(() => {
-        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            saveProgress();
-            e.preventDefault();
-            e.returnValue = '';
-        };
-
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === 'hidden') saveProgress();
-        };
-
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-
-        return () => {
-            window.removeEventListener('beforeunload', handleBeforeUnload);
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-        };
-    }, [saveProgress]);
+    
 
     if (!isReady) {
         return (
