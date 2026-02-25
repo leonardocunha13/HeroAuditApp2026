@@ -388,7 +388,13 @@ export function PropertiesComponent({
                       <td className="p-2">Access table cell value. Start with 0.</td>
                       <td className="p-2 font-mono">{`{tableID[0][1]}`}</td>
                     </tr>
-                    
+
+                    <tr>
+                      <td className="p-2 font-mono">round(x,y)</td>
+                      <td className="p-2">Round a number (x) to a specific number of decimal places (y)</td>
+                      <td className="p-2 font-mono">{`round({value}, 2)`}</td>
+                    </tr>
+
                   </tbody>
                 </table>
               </div>
@@ -479,7 +485,7 @@ export function PropertiesComponent({
               { label: "deg→rad", insert: "deg(" },
               { label: "rad→deg", insert: "rad(" },
 
-            ].map((fn) => (
+            ].map((fn: { label: string; insert: string }) => (
               <Button
                 key={fn.label}
                 type="button"
@@ -500,7 +506,7 @@ export function PropertiesComponent({
               { label: "x^y", insert: "Math.pow(" },
               { label: "³√", insert: "Math.cbrt(" },
 
-            ].map((pn) => (
+            ].map((pn: { label: string; insert: string }) => (
               <Button
                 key={pn.label}
                 type="button"
@@ -526,7 +532,7 @@ export function PropertiesComponent({
               { label: ">=", insert: " >= " },
               { label: "AND", insert: " and " },
               { label: "OR", insert: " or " },
-            ].map((op) => (
+            ].map((op: { label: string; insert: string }) => (
               <Button
                 key={op.label}
                 type="button"
@@ -535,6 +541,22 @@ export function PropertiesComponent({
                 onClick={() => insert(op.insert)}
               >
                 {op.label}
+              </Button>
+            ))}
+          </div>
+          <p className="text-sm font-medium">Rounding:</p>
+          <div className="flex gap-2 flex-wrap mt-2">
+            {[
+              { label: "ROUND()", insert: "ROUND(" },
+            ].map((fn: { label: string; insert: string }) => (
+              <Button
+                key={fn.label}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => insert(fn.insert)}
+              >
+                {fn.label}
               </Button>
             ))}
           </div>

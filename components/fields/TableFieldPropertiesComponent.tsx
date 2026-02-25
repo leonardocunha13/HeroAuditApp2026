@@ -58,7 +58,17 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
   });
 
   const [data, setData] = useState<string[][]>(element.extraAttributes.data);
-
+  useEffect(() => {
+    // Close merge builder if active cell changes
+    if (mergeBuilderOpen) {
+      const sameCell =
+        activeCell?.row === mergeBuilderOpen.row &&
+        activeCell?.col === mergeBuilderOpen.col;
+      if (!sameCell) {
+        setMergeBuilderOpen(null);
+      }
+    }
+  }, [activeCell, mergeBuilderOpen]);
   useEffect(() => {
     form.reset(element.extraAttributes);
     setData(element.extraAttributes.data);
@@ -611,14 +621,14 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
       {mergeBuilderOpen && activeCell?.row === mergeBuilderOpen.row && activeCell?.col === mergeBuilderOpen.col && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="cell-modal absolute z-50 bg-white border rounded-lg p-2 shadow-lg flex items-center gap-2"
+          className="cell-modal fixed  z-50 bg-white border rounded-lg p-2 shadow-lg flex items-center gap-2"
           style={{
-            top: (activeCell.rect?.top ?? 0) + window.scrollY - 45,
+            top: (activeCell.rect?.top ?? 0) + window.scrollY - 90,
             left: (activeCell.rect?.left ?? 0) + window.scrollX,
           }}
         >
           <label className="text-sm">Merge {mergeBuilderOpen.direction}:</label>
-          <input
+          <Input
             type="number"
             min={2}
             max={10}
@@ -650,7 +660,7 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
           >
             Insert
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => setMergeBuilderOpen(null)}>Cancel</Button>
+          <Button size="sm" variant="destructive" onClick={() => setMergeBuilderOpen(null)}>Cancel</Button>
         </div>
       )}
     </Form>

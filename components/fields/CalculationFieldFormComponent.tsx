@@ -75,10 +75,15 @@ function evaluateFormula(formula: string, values: Record<string, string>): strin
       Function(
         "deg",
         "rad",
+        "ROUND",
         `"use strict"; return (${expression})`
       )(
         (degValue: number) => (degValue * Math.PI) / 180,
-        (radValue: number) => (radValue * 180) / Math.PI
+        (radValue: number) => (radValue * 180) / Math.PI,
+        (value: number, digits: number = 0) => {
+          const factor = Math.pow(10, digits);
+          return Math.round(value * factor) / factor;
+        }
       )
     );
   } catch {
