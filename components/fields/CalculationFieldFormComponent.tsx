@@ -27,28 +27,28 @@ function evaluateFormula(formula: string, values: Record<string, string>): strin
 
   // --- TABLE CELLS {fieldId[row][col]} ---
   expression = expression.replace(
-  /\{(\w+)\[(\d+)\]\[(\d+)\]\}/g,
-  (_, fieldId, row, col) => {
-    let tableValue = values[fieldId];
+    /\{(\w+)\[(\d+)\]\[(\d+)\]\}/g,
+    (_, fieldId, row, col) => {
+      const tableValue = values[fieldId];
 
-    // Parse JSON string if needed
-    let table: (string | number)[][] = [];
-    if (typeof tableValue === "string") {
-      try {
-        table = JSON.parse(tableValue);
-      } catch {
+      // Parse JSON string if needed
+      let table: (string | number)[][] = [];
+      if (typeof tableValue === "string") {
+        try {
+          table = JSON.parse(tableValue);
+        } catch {
+          return "0";
+        }
+      } else if (Array.isArray(tableValue)) {
+        table = tableValue as (string | number)[][];
+      } else {
         return "0";
       }
-    } else if (Array.isArray(tableValue)) {
-      table = tableValue as (string | number)[][];
-    } else {
-      return "0";
-    }
 
-    const cell = table?.[Number(row)]?.[Number(col)] ?? "";
-    return getCellNumericValue(cell).toString();
-  }
-);
+      const cell = table?.[Number(row)]?.[Number(col)] ?? "";
+      return getCellNumericValue(cell).toString();
+    }
+  );
 
   // --- SIMPLE FIELD {fieldId} ---
   expression = expression.replace(/\{(\w+)\}/g, (_, fieldId) => {
