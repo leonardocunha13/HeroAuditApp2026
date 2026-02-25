@@ -7,20 +7,68 @@ import { Label } from "../../components/ui/label";
 import { CustomInstance } from "./CalculationField";
 import { formValueStore } from "../formValueStore";
 
-function evaluateFormula(formula: string, values: Record<string, string>) {
+function getCellNumericValue(raw: string | number): number {
+  if (raw === null || raw === undefined || raw === "") return 0;
+
+  // If it was [number:xxx], strip it
+  if (typeof raw === "string" && raw.startsWith("[number:")) {
+    const v = raw.match(/^\[number:(.*?)\]$/)?.[1];
+    return parseFloat(v || "0") || 0;
+  }
+
+  // Just parse as float (works for plain "18" strings)
+  return parseFloat(raw as string) || 0;
+}
+
+function evaluateFormula(formula: string, values: Record<string, string>): string {
   if (!formula) return "";
 
   let expression = formula;
 
-  // Replace {ID} with numeric values
-  Object.entries(values).forEach(([id, value]) => {
-    const numeric = parseFloat(value) || 0;
-    expression = expression.replaceAll(`{${id}}`, numeric.toString());
+  // --- TABLE CELLS {fieldId[row][col]} ---
+  expression = expression.replace(
+    /\{(\w+)\[(\d+)\]\[(\d+)\]\}/g,
+    (_, fieldId, row, col) => {
+      let table: any = values[fieldId];
+
+      // Parse JSON string if needed
+      if (typeof table === "string") {
+        try {
+          table = JSON.parse(table);
+        } catch {
+          return "0";
+        }
+      }
+
+      if (!Array.isArray(table)) return "0";
+
+      const cell = table?.[Number(row)]?.[Number(col)] ?? "";
+      return getCellNumericValue(cell).toString();
+    }
+  );
+
+  // --- SIMPLE FIELD {fieldId} ---
+  expression = expression.replace(/\{(\w+)\}/g, (_, fieldId) => {
+    let value = values[fieldId];
+
+    // Parse JSON for tables too (fallback to first cell maybe?)
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          // optional: take first cell as numeric
+          value = parsed[0]?.[0] ?? 0;
+        }
+      } catch {
+        // value remains as-is
+      }
+    }
+
+    return getCellNumericValue(value).toString();
   });
 
-  expression = expression
-    .replace(/\band\b/gi, "&&")
-    .replace(/\bor\b/gi, "||");
+  // Replace logical operators
+  expression = expression.replace(/\band\b/gi, "&&").replace(/\bor\b/gi, "||");
 
   try {
     return String(

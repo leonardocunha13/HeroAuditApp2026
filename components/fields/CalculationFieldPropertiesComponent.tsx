@@ -35,12 +35,22 @@ export function PropertiesComponent({
   const element = elementInstance as CustomInstance;
   const { updateElement, elements } = useDesigner();
   const [selectedFieldId, setSelectedFieldId] = useState<string>("");
-  const formulaSources = elements.filter(
-    (el) =>
-      (el.type === "NumberField" || el.type === "CalculationField") &&
-      el.id !== element.id
+  const numericFields = elements.filter(
+    (el) => el.type === "NumberField"
   );
 
+  const calculationFields = elements.filter(
+    (el) => el.type === "CalculationField" && el.id !== element.id
+  );
+
+  const tableFields = elements.filter(
+    (el) => el.type === "TableField"
+  );
+  const allSources = [...numericFields, ...calculationFields, ...tableFields];
+  const [tablePickerOpen, setTablePickerOpen] = useState(false);
+  const [selectedTableField, setSelectedTableField] = useState<FormElementInstance | null>(null);
+  const [rowIndex, setRowIndex] = useState(0);
+  const [colIndex, setColIndex] = useState(0);
   const form = useForm<FormSchema>({
     resolver: zodResolver(propertiesSchema),
     defaultValues: element.extraAttributes,
@@ -70,6 +80,7 @@ export function PropertiesComponent({
         className="space-y-4"
       >
         <p className="text-sm text-gray-600 dark:text-gray-400">This calculation field uses values from number & calculation fields. Only numeric values will be calculated correctly.</p>
+
         {/* LABEL */}
         <FormField
           control={form.control}
@@ -103,21 +114,33 @@ export function PropertiesComponent({
             </FormItem>
           )}
         />
-
+        <p className="text-xs text-muted-foreground mb-3">
+          Fields must be inserted using curly braces like {"{FieldID}"}.
+          Text outputs must be wrapped in quotes.
+        </p>
         {/* NUMBER FIELD PICKER AS DROPDOWN */}
         <Listbox
           value={selectedFieldId}
           onChange={(id: string) => {
-            const selectedField = formulaSources.find(f => f.id === id);
+            const selectedField = allSources.find(f => f.id === id);
             if (!selectedField) return;
-            insert(`{${selectedField.id}}`);
+
+            if (selectedField.type === "TableField") {
+              setSelectedTableField(selectedField);
+              setRowIndex(0);
+              setColIndex(0);
+              setTablePickerOpen(true);
+            } else {
+              insert(`{${selectedField.id}}`);
+            }
+
             setSelectedFieldId("");
           }}
         >
           <div className="relative mt-1">
             <ListboxButton className="relative w-full cursor-default rounded border bg-white dark:bg-gray-800 py-2 pl-3 pr-10 text-left shadow-md focus:outline-none focus:ring-2 focus:ring-[#facc15] sm:text-sm text-gray-900 dark:text-gray-100">
               {selectedFieldId
-                ? formulaSources.find(f => f.id === selectedFieldId)?.extraAttributes?.label
+                ? allSources.find(f => f.id === selectedFieldId)?.extraAttributes?.label
                 : "-- Select Field --"}
               <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
                 <ChevronUpDownIcon className="h-5 w-5 text-gray-400 dark:text-gray-300" aria-hidden="true" />
@@ -125,29 +148,106 @@ export function PropertiesComponent({
             </ListboxButton>
 
             <ListboxOptions className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded bg-white dark:bg-gray-800 py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 dark:ring-white dark:ring-opacity-20 focus:outline-none sm:text-sm">
-              {formulaSources.map((f) => {
-                const label = f.extraAttributes?.label || f.id;
-                return (
-                  <ListboxOption
-                    key={f.id}
-                    value={f.id}
-                    className="relative cursor-default select-none py-2 pl-3 pr-9 text-gray-900 dark:text-gray-100 hover:bg-[#facc15] hover:text-white"
-                  >
-                    {({ selected }) => (
-                      <>
-                        <span className={`block truncate ${selected ? "font-semibold" : "font-normal"}`}>
-                          {label} ({f.id})
-                        </span>
-                        {selected && (
-                          <span className="absolute inset-y-0 right-0 flex items-center pr-4 text-[#facc15] dark:text-[#facc15]">
-                            <CheckIcon className="h-5 w-5" aria-hidden="true" />
-                          </span>
+
+              {/* NUMERIC */}
+              {numericFields.length > 0 && (
+                <>
+                  <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase">
+                    Numeric Fields
+                  </div>
+
+                  {numericFields.map((f) => {
+                    const label = f.extraAttributes?.label || f.id;
+                    return (
+                      <ListboxOption
+                        key={f.id}
+                        value={f.id}
+                        className="relative cursor-default select-none py-2 pl-3 pr-9 hover:bg-[#facc15] hover:text-white"
+                      >
+                        {({ selected }) => (
+                          <>
+                            <span className={`block truncate ${selected ? "font-semibold" : ""}`}>
+                              {label} ({f.id})
+                            </span>
+                            {selected && (
+                              <span className="absolute inset-y-0 right-0 flex items-center pr-4 text-[#facc15]">
+                                <CheckIcon className="h-5 w-5" />
+                              </span>
+                            )}
+                          </>
                         )}
-                      </>
-                    )}
-                  </ListboxOption>
-                );
-              })}
+                      </ListboxOption>
+                    );
+                  })}
+                </>
+              )}
+
+              {/* CALCULATIONS */}
+              {calculationFields.length > 0 && (
+                <>
+                  <div className="px-3 py-1 mt-2 text-xs font-semibold text-gray-500 uppercase">
+                    Calculation Fields
+                  </div>
+
+                  {calculationFields.map((f) => {
+                    const label = f.extraAttributes?.label || f.id;
+                    return (
+                      <ListboxOption
+                        key={f.id}
+                        value={f.id}
+                        className="relative cursor-default select-none py-2 pl-3 pr-9 hover:bg-[#facc15] hover:text-white"
+                      >
+                        {({ selected }) => (
+                          <>
+                            <span className={`block truncate ${selected ? "font-semibold" : ""}`}>
+                              {label} ({f.id})
+                            </span>
+                            {selected && (
+                              <span className="absolute inset-y-0 right-0 flex items-center pr-4 text-[#facc15]">
+                                <CheckIcon className="h-5 w-5" />
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </ListboxOption>
+                    );
+                  })}
+                </>
+              )}
+
+              {/* TABLES */}
+              {tableFields.length > 0 && (
+                <>
+                  <div className="px-3 py-1 mt-2 text-xs font-semibold text-gray-500 uppercase">
+                    Table Fields
+                  </div>
+
+                  {tableFields.map((f) => {
+                    const label = f.extraAttributes?.label || f.id;
+                    return (
+                      <ListboxOption
+                        key={f.id}
+                        value={f.id}
+                        className="relative cursor-default select-none py-2 pl-3 pr-9 hover:bg-[#facc15] hover:text-white"
+                      >
+                        {({ selected }) => (
+                          <>
+                            <span className={`block truncate ${selected ? "font-semibold" : ""}`}>
+                              {label} ({f.id})
+                            </span>
+                            {selected && (
+                              <span className="absolute inset-y-0 right-0 flex items-center pr-4 text-[#facc15]">
+                                <CheckIcon className="h-5 w-5" />
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </ListboxOption>
+                    );
+                  })}
+                </>
+              )}
+
             </ListboxOptions>
           </div>
         </Listbox>
@@ -283,16 +383,73 @@ export function PropertiesComponent({
                       <td className="p-2 font-mono">{`rad(Math.PI)`}</td>
                     </tr>
 
+                    <tr>
+                      <td className="p-2 font-mono">tableId[row][col]</td>
+                      <td className="p-2">Access table cell value. Start with 0.</td>
+                      <td className="p-2 font-mono">{`{tableID[0][1]}`}</td>
+                    </tr>
+                    
                   </tbody>
                 </table>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={tablePickerOpen} onOpenChange={setTablePickerOpen}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Select Table Cell</DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4 mt-4">
+
+                {/* ROW */}
+                <div>
+                  <p className="text-sm font-medium mb-1">Row</p>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={rowIndex}
+                    onChange={(e) => setRowIndex(Number(e.target.value))}
+                  />
+                </div>
+
+                {/* COLUMN */}
+                <div>
+                  <p className="text-sm font-medium mb-1">Column</p>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={colIndex}
+                    onChange={(e) => setColIndex(Number(e.target.value))}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setTablePickerOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+
+                  <Button
+                    className="bg-[#facc15] hover:bg-[#eab308] text-black"
+                    onClick={() => {
+                      if (!selectedTableField) return;
+
+                      insert(`{${selectedTableField.id}[${rowIndex}][${colIndex}]}`);
+                      setTablePickerOpen(false);
+                    }}
+                  >
+                    Insert Cell
+                  </Button>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
         </div>
         {/* OPERATORS */}
         <div className="space-y-2">
-
-
           {/* Basic operators */}
           <p className="text-sm font-medium">Basic Arithmetic Operators:</p>
           <div className="flex gap-2 flex-wrap">
@@ -308,8 +465,7 @@ export function PropertiesComponent({
               </Button>
             ))}
           </div>
-
-          {/* Math functions */}
+          {/* Trigonometry functions */}
           <p className="text-sm font-medium">Trigonometry (angles in radians):</p>
           <div className="flex gap-2 flex-wrap mt-2">
             {[
@@ -335,7 +491,7 @@ export function PropertiesComponent({
               </Button>
 
             ))}
-
+            {/* Power and roots */}
           </div>
           <p className="text-sm font-medium">Powers & Roots:</p>
           <div className="flex gap-2 flex-wrap mt-2">
@@ -357,6 +513,7 @@ export function PropertiesComponent({
 
             ))}
           </div>
+          {/* Conditional and logical */}
           <p className="text-sm font-medium">Conditional & Logical:</p>
           <div className="flex gap-2 flex-wrap mt-2">
             {[

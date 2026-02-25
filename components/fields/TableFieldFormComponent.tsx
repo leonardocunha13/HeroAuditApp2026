@@ -21,6 +21,7 @@ import { CustomInstance } from "./TableField";
 import { CameraCell } from "../CameraCell"
 import { Textarea } from "../ui/textarea";
 import Image from "next/image"; // ✅ Import next/image
+import { formValueStore } from "../formValueStore";
 
 export function FormComponent({
   elementInstance,
@@ -54,6 +55,9 @@ export function FormComponent({
 
   const updateData = (newData: string[][]) => {
     setEditableData(newData);
+    // ✅ store full table
+    formValueStore.setValue(element.id, JSON.stringify(newData));
+ 
     if (!readOnly && updateElement) {
       updateElement(element.id, {
         ...element,
@@ -238,7 +242,7 @@ export function FormComponent({
     <div>
       <p className="font-medium mb-2">{label}</p>
       <Table className="border-2 border-gray-700 border-collapse w-full"
-      style={{ tableLayout: "auto" }}>
+        style={{ tableLayout: "auto" }}>
         <TableHeader>
           <TableRow>
             {(() => {
