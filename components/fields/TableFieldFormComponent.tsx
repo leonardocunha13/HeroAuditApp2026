@@ -57,7 +57,7 @@ export function FormComponent({
     setEditableData(newData);
     // ✅ store full table
     formValueStore.setValue(element.id, JSON.stringify(newData));
- 
+
     if (!readOnly && updateElement) {
       updateElement(element.id, {
         ...element,
@@ -92,6 +92,85 @@ export function FormComponent({
     newData[row][col] = checkboxValue;
     updateData(newData);
   };
+
+  function getCellNumericValue(raw: string): number {
+    if (!raw) return 0;
+
+    if (raw.startsWith("=")) {
+      return parseFloat(raw.slice(1)) || 0;
+    }
+
+    if (raw.startsWith("[number:")) {
+      const v = raw.match(/^\[number:(.*?)\]$/)?.[1];
+      return parseFloat(v || "0") || 0;
+    }
+
+    return parseFloat(raw) || 0;
+  }
+  function cellRefToIndexes(ref: string) {
+    const match = ref.match(/^([A-Z]+)(\d+)$/i);
+    if (!match) return null;
+
+    const letters = match[1].toUpperCase();
+    const row = Number(match[2]) - 1;
+
+    let col = 0;
+    for (let i = 0; i < letters.length; i++) {
+      col = col * 26 + (letters.charCodeAt(i) - 64);
+    }
+    col -= 1;
+
+    return { row, col };
+  }
+  
+  function evaluateTableFormula(
+    formula: string,
+    table: string[][],
+    visited = new Set<string>()
+  ): string {
+    if (!formula.startsWith("=")) return formula;
+
+    let expression = formula.slice(1);
+
+    if (visited.has(formula)) return "CIRC";
+    visited.add(formula);
+
+    expression = expression.replace(
+      /\b([A-Z]+\d+)\b/g,
+      (_, cellRef) => {
+        const pos = cellRefToIndexes(cellRef);
+        if (!pos) return "0";
+
+        const raw = table?.[pos.row]?.[pos.col] ?? "";
+
+        if (typeof raw === "string" && raw.startsWith("=")) {
+          return evaluateTableFormula(raw, table, visited);
+        }
+
+        return getCellNumericValue(raw).toString();
+      }
+    );
+
+    // support power operator
+    expression = expression.replace(/\^/g, "**");
+
+    try {
+      const ROUND = (value: number, decimals = 0) => {
+        const factor = Math.pow(10, decimals);
+        return Math.round(value * factor) / factor;
+      };
+
+      const result = Function(
+        "Math",
+        "ROUND",
+        `"use strict"; return (${expression})`
+      )(Math, ROUND);
+
+      return String(result);
+    } catch {
+      return "ERR";
+    }
+  }
 
   const parseCell = (cellValue: string): string => {
     if (cellValue === "[PASS]") return "PASS";
@@ -312,6 +391,7 @@ export function FormComponent({
                   }
                 }
                 const rawContent = content.trim();
+                const isFormula = rawContent.startsWith("=");
                 const isCheckbox = rawContent.startsWith("[checkbox");
                 const isSelect = rawContent.startsWith("[select");
                 const isNumber = rawContent.startsWith("[number");
@@ -504,6 +584,17 @@ export function FormComponent({
                         onChange={(e) => handleCellChange(row, col, e.target.value)}
                         onKeyDown={(e) => e.stopPropagation()}
                       />
+                    ) : isFormula ? (
+                      <div
+                        className="break-words bg-yellow-50 font-medium"
+                        style={{
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          lineHeight: "1.2",
+                        }}
+                      >
+                        {evaluateTableFormula(rawContent, editableData)}
+                      </div>
                     ) : (
                       <div
                         className="break-words"
@@ -527,6 +618,6 @@ export function FormComponent({
           ))}
         </TableBody>
       </Table>
-    </div >
+    </div>
   );
 }
