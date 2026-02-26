@@ -15,7 +15,7 @@ import {
 import { Input } from "../ui/input";
 import ReactDatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { CustomInstance } from "./TableField";
 import { CameraCell } from "../CameraCell"
@@ -26,6 +26,7 @@ import { formValueStore } from "../formValueStore";
 export function FormComponent({
   elementInstance,
   defaultValue,
+  submitValue,   // ✅ ADD THIS
   readOnly,
   updateElement,
   pdf,
@@ -33,18 +34,25 @@ export function FormComponent({
   elementInstance: FormElementInstance;
   defaultValue?: unknown;
   isInvalid?: boolean;
-  submitValue?: SubmitFunction;
+  submitValue?: SubmitFunction;   // already in your type
   readOnly?: boolean;
   updateElement?: (id: string, element: FormElementInstance) => void;
   pdf?: boolean;
 }) {
   const element = elementInstance as CustomInstance;
   const { rows, columns, label, columnHeaders = [], headerRowIndexes = [] as number[] } = element.extraAttributes; //test
-  const initialData: string[][] = Array.isArray(defaultValue)
-    ? (defaultValue as string[][])
-    : Array.isArray(element.extraAttributes.data)
-      ? element.extraAttributes.data
-      : [];
+  const [, forceRender] = useState(0);
+  const initialData: string[][] = (() => {
+    if (Array.isArray(defaultValue)) return defaultValue as string[][];
+    if (typeof defaultValue === "string") {
+      try {
+        const parsed = JSON.parse(defaultValue);
+        if (Array.isArray(parsed)) return parsed as string[][];
+      } catch { }
+    }
+    return Array.isArray(element.extraAttributes.data) ? element.extraAttributes.data : [];
+  })();
+
   const [editableData, setEditableData] = useState<string[][]>(initialData);
 
   const [editableCells] = useState(() =>
@@ -53,11 +61,35 @@ export function FormComponent({
     )
   );
 
+  const persistEvaluatedTable = (data: string[][]) => {
+    const evaluatedTable = data.map((row) =>
+      row.map((cell) => {
+        const raw = (cell ?? "").toString().trim();
+        if (raw.startsWith("=")) {
+          return evaluateTableFormula(raw, data);
+        }
+        return cell;
+      })
+    );
+
+    const payload = JSON.stringify(evaluatedTable);
+
+    // ✅ this is what CalculationField reads
+    formValueStore.setValue(element.id, payload);
+
+    // ✅ IMPORTANT: also submit the evaluated version
+    if (submitValue) {
+      submitValue(element.id, payload);
+    }
+  };
+
   const updateData = (newData: string[][]) => {
     setEditableData(newData);
-    // ✅ store full table
-    formValueStore.setValue(element.id, JSON.stringify(newData));
 
+    // ✅ persist evaluated to store + submit
+    persistEvaluatedTable(newData);
+
+    // keep raw formulas saved in element (so the table UI still shows formulas)
     if (!readOnly && updateElement) {
       updateElement(element.id, {
         ...element,
@@ -68,6 +100,18 @@ export function FormComponent({
       });
     }
   };
+
+  // ✅ initialize once so calc fields work even before any edits
+  useEffect(() => {
+    persistEvaluatedTable(editableData);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    return formValueStore.subscribe(() => {
+      forceRender((x) => x + 1);
+    });
+  }, []);
 
   const handleCellChange = (row: number, col: number, value: string) => {
     const newData = [...editableData];
@@ -122,36 +166,82 @@ export function FormComponent({
 
     return { row, col };
   }
-  
+
+  function evalCell(
+    table: string[][],
+    row: number,
+    col: number,
+    visitedCells: Set<string>
+  ): string {
+    const key = `${row}:${col}`;
+    if (visitedCells.has(key)) return "CIRC";
+
+    const raw = (table[row]?.[col] ?? "").toString().trim();
+    if (!raw) return "0";
+
+    // if it's a formula, evaluate it with this cell added to the recursion path
+    if (raw.startsWith("=")) {
+      const nextVisited = new Set(visitedCells);
+      nextVisited.add(key);
+      return evaluateTableFormula(raw, table, nextVisited);
+    }
+
+    return String(getCellNumericValue(raw));
+  }
+
   function evaluateTableFormula(
     formula: string,
-    table: string[][],
-    visited = new Set<string>()
+    currentTable: string[][],
+    visitedCells = new Set<string>()
   ): string {
     if (!formula.startsWith("=")) return formula;
 
     let expression = formula.slice(1);
 
-    if (visited.has(formula)) return "CIRC";
-    visited.add(formula);
+    const allValues = formValueStore.getValues();
 
-    expression = expression.replace(
-      /\b([A-Z]+\d+)\b/g,
-      (_, cellRef) => {
-        const pos = cellRefToIndexes(cellRef);
-        if (!pos) return "0";
+    // {fieldId}
+    expression = expression.replace(/\{(\w+)\}(?!:)/g, (_, fieldId) => {
+      const v = allValues[fieldId];
+      const n = Number(String(v));
+      return Number.isFinite(n) ? String(n) : "0";
+    });
 
-        const raw = table?.[pos.row]?.[pos.col] ?? "";
+    // {FIELDID:A1}
+    expression = expression.replace(/\{(\w+):([A-Z]+\d+)\}/g, (_, fieldId, cellRef) => {
+      const tableValue = allValues[String(fieldId)];
+      if (!tableValue) return "0";
 
-        if (typeof raw === "string" && raw.startsWith("=")) {
-          return evaluateTableFormula(raw, table, visited);
-        }
-
-        return getCellNumericValue(raw).toString();
+      let table: string[][];
+      try {
+        table = typeof tableValue === "string" ? JSON.parse(tableValue) : (tableValue as string[][]);
+      } catch {
+        return "0";
       }
-    );
+      if (!Array.isArray(table)) return "0";
 
-    // support power operator
+      const pos = cellRefToIndexes(cellRef);
+      if (!pos) return "0";
+
+      // key includes fieldId to prevent cross-table false “CIRC”
+      const key = `${fieldId}:${pos.row}:${pos.col}`;
+      if (visitedCells.has(key)) return "CIRC";
+
+      const nextVisited = new Set(visitedCells);
+      nextVisited.add(key);
+
+      const raw = (table[pos.row]?.[pos.col] ?? "").toString().trim();
+      if (raw.startsWith("=")) return evaluateTableFormula(raw, table, nextVisited);
+      return String(getCellNumericValue(raw));
+    });
+
+    // Same-table refs: A1, B2, C1, etc
+    expression = expression.replace(/\b([A-Z]+\d+)\b/g, (_, cellRef) => {
+      const pos = cellRefToIndexes(cellRef);
+      if (!pos) return "0";
+      return evalCell(currentTable, pos.row, pos.col, visitedCells);
+    });
+
     expression = expression.replace(/\^/g, "**");
 
     try {
@@ -159,14 +249,17 @@ export function FormComponent({
         const factor = Math.pow(10, decimals);
         return Math.round(value * factor) / factor;
       };
+      const DEG = (rad: number) => (rad * 180) / Math.PI;
+      const RAD = (deg: number) => (deg * Math.PI) / 180;
 
-      const result = Function(
-        "Math",
-        "ROUND",
-        `"use strict"; return (${expression})`
-      )(Math, ROUND);
-
-      return String(result);
+      return String(
+        Function("Math", "ROUND", "DEG", "RAD", `"use strict"; return (${expression})`)(
+          Math,
+          ROUND,
+          DEG,
+          RAD
+        )
+      );
     } catch {
       return "ERR";
     }

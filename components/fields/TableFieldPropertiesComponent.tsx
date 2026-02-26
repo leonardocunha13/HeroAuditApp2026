@@ -315,7 +315,17 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
       },
     });
   }
+  function getColumnLetter(index: number): string {
+    let result = "";
+    let i = index;
 
+    while (i >= 0) {
+      result = String.fromCharCode((i % 26) + 65) + result;
+      i = Math.floor(i / 26) - 1;
+    }
+
+    return result;
+  }
 
   return (
     <Form {...form}>
@@ -377,6 +387,7 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
                 Use <code>[merge:right:#]Text</code> to merge with # cells to the right.<br />
                 Use <code>[merge:down:#]Text</code> to merge with # cells below.<br />
                 Use <code>" "</code> (a single space) to create a non-editable empty cell.<br />
+                The table supports formulas, including references to other tables using <code>{`={tableID:ColRow}`}</code>. To reference cells within the same table, simply use the cell address (e.g., A1) without any prefix.<br />
                 For a regular editable text field, leave the cell blank.
               </FormDescription>
             )}
@@ -405,16 +416,25 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
           <Table>
             <TableHeader>
               <TableRow>
+
+                {/* Empty top-left corner */}
+                <TableHead className="w-[80px]" />
+
                 {[...Array(watchColumns)].map((_, col) => (
                   <TableHead key={col}>
+                    <div className="text-xs font-bold text-muted-foreground text-center w-[50px]">
+                      {getColumnLetter(col)}
+                    </div>
+
+
                     <Button variant="ghost" size="icon" onClick={() => deleteColumn(col)}>
                       ✕
                     </Button>
+
                     <Textarea
-                      className="w-full min-h-[60px] p-2 pr-6 pb-6 border rounded resize-y overflow-hidden relative"
+                      className="w-full min-h-[60px] p-2 pr-6 pb-6 border rounded resize-y"
                       value={columnHeaders[col] || ""}
                       onChange={(e) => handleHeaderChange(col, e.target.value)}
-                      onKeyDown={(e) => e.stopPropagation()}
                     />
                   </TableHead>
                 ))}
@@ -422,9 +442,11 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
             </TableHeader>
             <TableBody>
               {[...Array(watchRows)].map((_, row) => (
-                <TableRow
-                  key={row}
-                  className={headerRowIndexes.includes(row) ? "bg-muted text-muted-foreground font-medium" : ""}>
+                <TableRow key={row}>
+
+                  <TableCell className="text-xs font-bold text-muted-foreground text-center w-[50px]">
+                    {row + 1}
+                  </TableCell>
 
                   {[...Array(watchColumns)].map((_, col) => (
                     <TableCell
@@ -475,8 +497,8 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
           onClick={(e) => e.stopPropagation()}
           className="cell-toolbar fixed z-50 flex gap-2 bg-white shadow-lg border rounded-lg p-2"
           style={{
-            top: activeCell.rect.top + window.scrollY - 45,
-            left: activeCell.rect.left + window.scrollX,
+            top: activeCell.rect.top - 45,
+            left: activeCell.rect.left,
           }}
         >
           <Button

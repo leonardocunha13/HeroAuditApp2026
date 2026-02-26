@@ -35,6 +35,7 @@ export function PropertiesComponent({
   const element = elementInstance as CustomInstance;
   const { updateElement, elements } = useDesigner();
   const [selectedFieldId, setSelectedFieldId] = useState<string>("");
+  const [rowNumber, setRowNumber] = useState(1);
   const numericFields = elements.filter(
     (el) => el.type === "NumberField"
   );
@@ -49,8 +50,7 @@ export function PropertiesComponent({
   const allSources = [...numericFields, ...calculationFields, ...tableFields];
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
   const [selectedTableField, setSelectedTableField] = useState<FormElementInstance | null>(null);
-  const [rowIndex, setRowIndex] = useState(0);
-  const [colIndex, setColIndex] = useState(0);
+  const [colLetters, setColLetters] = useState("A");
   const form = useForm<FormSchema>({
     resolver: zodResolver(propertiesSchema),
     defaultValues: element.extraAttributes,
@@ -72,6 +72,17 @@ export function PropertiesComponent({
     form.setValue("formula", current + text);
     applyChanges(form.getValues());
   };
+
+  function lettersToColIndex(letters: string): number {
+    let index = 0;
+    const upper = letters.toUpperCase();
+
+    for (let i = 0; i < upper.length; i++) {
+      index = index * 26 + (upper.charCodeAt(i) - 64);
+    }
+
+    return index - 1; // zero-based
+  }
 
   return (
     <Form {...form}>
@@ -127,8 +138,8 @@ export function PropertiesComponent({
 
             if (selectedField.type === "TableField") {
               setSelectedTableField(selectedField);
-              setRowIndex(0);
-              setColIndex(0);
+              setRowNumber(1);
+              setColLetters("A");
               setTablePickerOpen(true);
             } else {
               insert(`{${selectedField.id}}`);
@@ -372,21 +383,21 @@ export function PropertiesComponent({
 
                     {/* TRIG */}
                     <tr>
-                      <td className="p-2 font-mono">deg()</td>
+                      <td className="p-2 font-mono">DEG()</td>
                       <td className="p-2">Degrees → Radians</td>
-                      <td className="p-2 font-mono">{`Math.sin(deg({angle}))`}</td>
+                      <td className="p-2 font-mono">{`Math.sin(DEG({angle}))`}</td>
                     </tr>
 
                     <tr>
-                      <td className="p-2 font-mono">rad()</td>
+                      <td className="p-2 font-mono">RAD()</td>
                       <td className="p-2">Radians → Degrees</td>
-                      <td className="p-2 font-mono">{`rad(Math.PI)`}</td>
+                      <td className="p-2 font-mono">{`RAD(Math.PI)`}</td>
                     </tr>
 
                     <tr>
-                      <td className="p-2 font-mono">tableId[row][col]</td>
+                      <td className="p-2 font-mono">tableId:ColRow</td>
                       <td className="p-2">Access table cell value. Start with 0.</td>
-                      <td className="p-2 font-mono">{`{tableID[0][1]}`}</td>
+                      <td className="p-2 font-mono">{`{tableID:B1}`}</td>
                     </tr>
 
                     <tr>
@@ -413,9 +424,9 @@ export function PropertiesComponent({
                   <p className="text-sm font-medium mb-1">Row</p>
                   <Input
                     type="number"
-                    min={0}
-                    value={rowIndex}
-                    onChange={(e) => setRowIndex(Number(e.target.value))}
+                    min={1}
+                    value={rowNumber}
+                    onChange={(e) => setRowNumber(Math.max(1, Number(e.target.value) || 1))}
                   />
                 </div>
 
@@ -423,10 +434,12 @@ export function PropertiesComponent({
                 <div>
                   <p className="text-sm font-medium mb-1">Column</p>
                   <Input
-                    type="number"
-                    min={0}
-                    value={colIndex}
-                    onChange={(e) => setColIndex(Number(e.target.value))}
+                    type="text"
+                    value={colLetters}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^a-zA-Z]/g, "").toUpperCase();
+                      setColLetters(val);
+                    }}
                   />
                 </div>
 
@@ -443,7 +456,13 @@ export function PropertiesComponent({
                     onClick={() => {
                       if (!selectedTableField) return;
 
-                      insert(`{${selectedTableField.id}[${rowIndex}][${colIndex}]}`);
+                      const letters = colLetters.trim().toUpperCase();
+
+                      // basic validation
+                      if (!letters || lettersToColIndex(letters) < 0) return;
+
+                      const a1 = `${letters}${rowNumber}`;
+                      insert(`{${selectedTableField.id}:${a1}}`);
                       setTablePickerOpen(false);
                     }}
                   >
@@ -482,8 +501,8 @@ export function PropertiesComponent({
               { label: "acos", insert: "Math.acos(" },
               { label: "atan", insert: "Math.atan(" },
               { label: "PI", insert: "Math.PI" },
-              { label: "deg→rad", insert: "deg(" },
-              { label: "rad→deg", insert: "rad(" },
+              { label: "deg→rad", insert: "DEG(" },
+              { label: "rad→deg", insert: "RAD(" },
 
             ].map((fn: { label: string; insert: string }) => (
               <Button

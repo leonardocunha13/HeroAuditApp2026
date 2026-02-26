@@ -188,13 +188,31 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
     }
 
     case "TableField": {
-      const tableData = value || element.extraAttributes?.data;
       const headerRowIndexes: number[] = element.extraAttributes?.headerRowIndexes || [];
 
-      if (!tableData || !Array.isArray(tableData)) return <Text>[Invalid table]</Text>;
+      const parseMaybeTable = (v: unknown): string[][] | null => {
+        if (!v) return null;
+        if (Array.isArray(v)) return v as string[][];
+        if (typeof v === "string") {
+          try {
+            const parsed = JSON.parse(v);
+            return Array.isArray(parsed) ? (parsed as string[][]) : null;
+          } catch {
+            return null;
+          }
+        }
+        return null;
+      };
+
+      const tableData =
+        parseMaybeTable(value) ??
+        parseMaybeTable(element.extraAttributes?.data) ??
+        null;
+
+      if (!tableData) return <Text>[Invalid table]</Text>;
 
       const rows = tableData.length;
-      const columns = Math.max(...tableData.map((row: string[]) => row.length));
+      const columns = Math.max(...tableData.map((row: string[]) => row.length), 0);
       const isCompactMode = columns > 10;
       const columnHeaders = element.extraAttributes?.columnHeaders || [];
 
@@ -767,7 +785,7 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
         </View>
       );
     }
-    
+
     case "CameraField": {
       const imageUrl = typeof value === "string" ? value : element.extraAttributes?.content;
       if (!imageUrl) return <Text>[No image]</Text>;

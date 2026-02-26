@@ -60,7 +60,7 @@ export function DesignerComponent({ elementInstance }: { elementInstance: FormEl
   };
 
   return (
-    <div ref={containerRef}>
+    <div ref={containerRef} className="relative">
       <p className="font-medium mb-2">{label}</p>
       <Table>
         <TableHeader>
@@ -98,6 +98,9 @@ export function DesignerComponent({ elementInstance }: { elementInstance: FormEl
           })}
         </TableBody>
       </Table>
+      <div className="absolute bottom-0 left-2 px-2 py-[2px] text-[10px] rounded bg-muted text-muted-foreground border">
+        {element.id}
+      </div>
     </div>
   );
 }

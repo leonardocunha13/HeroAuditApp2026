@@ -223,6 +223,127 @@ function FormSubmitComponent({ formUrl, content }: { content: FormElementInstanc
     };
   }, [saveProgress]);
 
+  function getCellNumericValue(raw: string): number {
+    if (!raw || typeof raw !== "string") return 0;
+    const t = raw.trim();
+    if (!t) return 0;
+    if (t.startsWith("=")) return 0;
+
+    if (t.startsWith("[number:")) {
+      const v = t.match(/^\[number:(.*?)\]$/)?.[1]?.trim();
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    // any other tag
+    if (t.startsWith("[")) return 0;
+
+    const n = Number(t);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function cellRefToIndexes(ref: string) {
+    const match = ref.match(/^([A-Z]+)(\d+)$/i);
+    if (!match) return null;
+
+    const letters = match[1].toUpperCase();
+    const row = Number(match[2]) - 1;
+
+    let col = 0;
+    for (let i = 0; i < letters.length; i++) col = col * 26 + (letters.charCodeAt(i) - 64);
+    col -= 1;
+
+    return { row, col };
+  }
+
+  function evaluateTableFormula(
+    formula: string,
+    currentTable: string[][],
+    allValues: Record<string, unknown>,
+    visited = new Set<string>()
+  ): string {
+    if (!formula.startsWith("=")) return formula;
+
+    if (visited.has(formula)) return "CIRC";
+    visited.add(formula);
+
+    let expression = formula.slice(1);
+
+    // {fieldId}
+    expression = expression.replace(/\{(\w+)\}/g, (_, fieldId) => {
+      const value = allValues[fieldId];
+
+      if (value === undefined || value === null) return "0";
+
+      if (typeof value === "string") {
+        try {
+          const parsed = JSON.parse(value);
+          if (Array.isArray(parsed)) {
+            return "0"; // tables require {table:A1}
+          }
+        } catch { }
+      }
+
+      return String(parseFloat(String(value)) || 0);
+    });
+
+    // {TABLEID:A1}
+    expression = expression.replace(/\{(\w+):([A-Z]+\d+)\}/g, (_, fieldId, cellRef) => {
+      const tableValue = allValues[String(fieldId)];
+      if (!tableValue) return "0";
+
+      let table: string[][];
+      try {
+        table = typeof tableValue === "string" ? JSON.parse(tableValue) : (tableValue as string[][]);
+      } catch {
+        return "0";
+      }
+      if (!Array.isArray(table)) return "0";
+
+      const pos = cellRefToIndexes(cellRef);
+      if (!pos) return "0";
+
+      const raw = table[pos.row]?.[pos.col] ?? "";
+      if (typeof raw === "string" && raw.trim().startsWith("=")) {
+        return evaluateTableFormula(raw.trim(), table, allValues, visited);
+      }
+      return String(getCellNumericValue(String(raw)));
+    });
+
+    // A1 references inside same table
+    expression = expression.replace(/\b([A-Z]+\d+)\b/g, (_, cellRef) => {
+      const pos = cellRefToIndexes(cellRef);
+      if (!pos) return "0";
+
+      const raw = currentTable[pos.row]?.[pos.col] ?? "";
+      if (typeof raw === "string" && raw.trim().startsWith("=")) {
+        return evaluateTableFormula(raw.trim(), currentTable, allValues, visited);
+      }
+      return String(getCellNumericValue(String(raw)));
+    });
+
+    expression = expression.replace(/\^/g, "**");
+
+    try {
+      const ROUND = (value: number, decimals = 0) => {
+        const factor = Math.pow(10, decimals);
+        return Math.round(value * factor) / factor;
+      };
+      const DEG = (rad: number) => (rad * 180) / Math.PI;
+      const RAD = (deg: number) => (deg * Math.PI) / 180;
+
+      const result = Function("Math", "ROUND", "DEG", "RAD", `"use strict"; return (${expression})`)(
+        Math,
+        ROUND,
+        DEG,
+        RAD
+      );
+
+      return String(result);
+    } catch {
+      return "ERR";
+    }
+  }
   // Form submission handler
   const submitForm = async () => {
     formErrors.current = {};
@@ -238,6 +359,38 @@ function FormSubmitComponent({ formUrl, content }: { content: FormElementInstanc
 
     try {
       const cleanData = JSON.parse(JSON.stringify(formValues.current));
+      // Build lookup of element types
+      const elementTypeById = new Map(content.map((el) => [el.id, el.type]));
+
+      // Evaluate table formulas BEFORE saving
+      for (const key of Object.keys(cleanData)) {
+        if (elementTypeById.get(key) !== "TableField") continue;
+
+        try {
+          const table = JSON.parse(cleanData[key]);
+          if (!Array.isArray(table)) continue;
+
+          const evaluatedTable = table.map((row: any[]) =>
+            row.map((cell: any) => {
+              if (typeof cell === "string" && cell.trim().startsWith("=")) {
+                const evaluated = evaluateTableFormula(
+                  cell.trim(),
+                  table,
+                  cleanData
+                );
+
+                const n = Number(evaluated);
+                return Number.isFinite(n) ? `[number:${n}]` : "[number:0]";
+              }
+              return cell;
+            })
+          );
+
+          cleanData[key] = JSON.stringify(evaluatedTable);
+        } catch {
+          // ignore invalid tables
+        }
+      }
       const formData = new FormData();
       formData.append("userId", userId ?? "");
       formData.append("formId", formUrl);

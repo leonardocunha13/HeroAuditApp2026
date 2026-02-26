@@ -21,6 +21,9 @@ export function DesignerComponent({
           {element.extraAttributes.helperText}
         </p>
       )}
+      <div className="absolute bottom-0 left-2 px-2 py-[2px] text-[10px] rounded bg-muted text-muted-foreground border">
+        {element.id}
+      </div>
     </div>
   );
 }
