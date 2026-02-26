@@ -7,7 +7,7 @@ import { Label } from "../../components/ui/label";
 import { CustomInstance } from "./CalculationField";
 import { formValueStore } from "../formValueStore";
 
-function getCellNumericValue(raw: any): number {
+function getCellNumericValue(raw: unknown): number {
   if (raw === null || raw === undefined || raw === "") return 0;
 
   if (typeof raw === "number") return raw;
@@ -48,7 +48,7 @@ function cellRefToIndexes(ref: string) {
 function evaluateTableCellFormula(
   formula: string,
   currentTable: (string | number)[][],
-  values: Record<string, any>,
+  values: Record<string, unknown>,
   visited: Set<string>
 ): number {
   const trimmed = String(formula ?? "").trim();
@@ -66,7 +66,7 @@ function evaluateTableCellFormula(
     const tableValue = values[String(tableId)];
     if (!tableValue) return "0";
 
-    let table: any;
+    let table: unknown;
     try {
       table = typeof tableValue === "string" ? JSON.parse(tableValue) : tableValue;
     } catch {
@@ -129,7 +129,7 @@ function evaluateTableCellFormula(
   }
 }
 
-function evaluateFormula(formula: string, values: Record<string, any>): string {
+function evaluateFormula(formula: string, values: Record<string, unknown>): string {
   if (!formula) return "";
 
   let expression = String(formula);
@@ -164,7 +164,7 @@ function evaluateFormula(formula: string, values: Record<string, any>): string {
 
   // ✅ normal field refs {fieldId}
   expression = expression.replace(/\{(\w+)\}/g, (_, fieldId) => {
-    let value = values[String(fieldId)];
+    const value = values[String(fieldId)];
 
     // if someone references a table directly, treat as 0 (forces using {tableId:A1})
     if (typeof value === "string") {

@@ -281,7 +281,8 @@ function FormSubmitComponent({ formUrl, content }: { content: FormElementInstanc
           if (Array.isArray(parsed)) {
             return "0"; // tables require {table:A1}
           }
-        } catch { }
+        } catch (e) {
+        }
       }
 
       return String(parseFloat(String(value)) || 0);
@@ -369,22 +370,32 @@ function FormSubmitComponent({ formUrl, content }: { content: FormElementInstanc
         try {
           const table = JSON.parse(cleanData[key]);
           if (!Array.isArray(table)) continue;
+          type TableCell = string | number | null;
+          type TableRow = TableCell[];
+          type TableData = TableRow[];
 
-          const evaluatedTable = table.map((row: any[]) =>
-            row.map((cell: any) => {
+          const evaluatedTable: TableData = table.map((row: unknown) => {
+            if (!Array.isArray(row)) return [];
+
+            return row.map((cell: unknown) => {
               if (typeof cell === "string" && cell.trim().startsWith("=")) {
                 const evaluated = evaluateTableFormula(
                   cell.trim(),
-                  table,
+                  table as string[][],
                   cleanData
                 );
 
                 const n = Number(evaluated);
                 return Number.isFinite(n) ? `[number:${n}]` : "[number:0]";
               }
-              return cell;
-            })
-          );
+
+              if (typeof cell === "string" || typeof cell === "number" || cell === null) {
+                return cell;
+              }
+
+              return "";
+            });
+          });
 
           cleanData[key] = JSON.stringify(evaluatedTable);
         } catch {
