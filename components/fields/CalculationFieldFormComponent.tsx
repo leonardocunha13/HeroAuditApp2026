@@ -1,6 +1,7 @@
+//CalculationFieldFormComponent.tsx
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { FormElementInstance, SubmitFunction } from "../FormElements";
 import { Input } from "../ui/input";
 import { Label } from "../../components/ui/label";
@@ -15,13 +16,13 @@ function getCellNumericValue(raw: unknown): number {
   if (typeof raw === "string") {
     const s = raw.trim();
 
-    // [number:xxx]
-    if (s.startsWith("[number:")) {
-      const v = s.match(/^\[number:(.*?)\]$/)?.[1];
-      return parseFloat(v || "0") || 0;
+    // ✅ extract number inside [number:xxx] anywhere in the string
+    const numberMatch = s.match(/\[number:\s*([-+]?\d*\.?\d+)\s*\]/i);
+    if (numberMatch) {
+      return parseFloat(numberMatch[1]);
     }
 
-    // plain numeric string
+    // fallback: plain numeric string
     const n = parseFloat(s);
     return Number.isFinite(n) ? n : 0;
   }
@@ -218,48 +219,48 @@ export function FormComponent({
 }) {
   const element = elementInstance as CustomInstance;
 
-  const [value, setValue] = useState(defaultValue || "");
+  const storeValues = useSyncExternalStore(
+    (listener) => formValueStore.subscribe(listener),
+    () => formValueStore.getValues(),
+    () => formValueStore.getValues()
+  );
 
+  const [value, setValue] = useState(defaultValue || "");
   const lastValueRef = useRef<string>(defaultValue || "");
 
+  // ✅ initialize default ONLY if store doesn't have it yet
   useEffect(() => {
-    if (defaultValue) {
+    const current = formValueStore.getValues()[element.id];
+    if ((current === undefined || current === "") && defaultValue !== undefined) {
       formValueStore.setValue(element.id, defaultValue);
+      lastValueRef.current = defaultValue;
+      setValue(defaultValue);
     }
   }, [defaultValue, element.id]);
 
+  const computed = useMemo(() => {
+    return evaluateFormula(element.extraAttributes.formula, storeValues);
+  }, [element.extraAttributes.formula, storeValues]);
+
+  // ✅ single effect that applies computed result
   useEffect(() => {
     if (readOnly && defaultValue !== undefined) {
       setValue(defaultValue);
       return;
     }
 
-    // normal live calculation logic here
-  }, [defaultValue, readOnly]);
+    if (computed === lastValueRef.current) return;
 
-  useEffect(() => {
-    const recalc = () => {
-      const result = evaluateFormula(
-        element.extraAttributes.formula,
-        formValueStore.getValues()
-      );
+    lastValueRef.current = computed;
+    setValue(computed);
 
-      if (result === lastValueRef.current) return;
+    // write to store only if changed
+    if (formValueStore.getValues()[element.id] !== computed) {
+      formValueStore.setValue(element.id, computed);
+    }
 
-      lastValueRef.current = result;
-
-      setValue(result);
-
-      formValueStore.setValue(element.id, result);
-
-      if (submitValue) {
-        submitValue(element.id, result);
-      }
-    };
-
-    recalc();
-    return formValueStore.subscribe(recalc);
-  }, [element.extraAttributes.formula, element.id, submitValue]);
+    submitValue?.(element.id, computed);
+  }, [computed, readOnly, defaultValue, element.id, submitValue]);
 
   return (
     <div className="flex flex-col gap-2 w-full">

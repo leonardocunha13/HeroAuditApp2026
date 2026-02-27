@@ -1,4 +1,4 @@
-// src/components/fields/TableField.tsx
+// TableFieldFormComponent.tsx
 "use client";
 import {
   FormElementInstance,
@@ -15,7 +15,7 @@ import {
 import { Input } from "../ui/input";
 import ReactDatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { CustomInstance } from "./TableField";
 import { CameraCell } from "../CameraCell"
@@ -41,7 +41,6 @@ export function FormComponent({
 }) {
   const element = elementInstance as CustomInstance;
   const { rows, columns, label, columnHeaders = [], headerRowIndexes = [] as number[] } = element.extraAttributes; //test
-  const [, forceRender] = useState(0);
   const initialData: string[][] = (() => {
     if (Array.isArray(defaultValue)) return defaultValue as string[][];
     if (typeof defaultValue === "string") {
@@ -69,6 +68,7 @@ export function FormComponent({
     const evaluatedTable = data.map((row) =>
       row.map((cell) => {
         const raw = (cell ?? "").toString().trim();
+
         if (raw.startsWith("=")) {
           return evaluateTableFormula(raw, data);
         }
@@ -111,14 +111,14 @@ export function FormComponent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    return formValueStore.subscribe(() => {
-      forceRender((x) => x + 1);
-    });
-  }, []);
+  const storeValues = useSyncExternalStore(
+    (listener) => formValueStore.subscribe(listener),
+    () => formValueStore.getValues(),
+    () => formValueStore.getValues()
+  );
 
   const handleCellChange = (row: number, col: number, value: string) => {
-    const newData = [...editableData];
+    const newData = editableData.map((r) => [...(r ?? [])]);
     if (!newData[row]) newData[row] = [];
     newData[row][col] = value;
     updateData(newData);
@@ -127,7 +127,7 @@ export function FormComponent({
   type CheckboxState = "checked" | "unchecked" | "neutral";
 
   const handleCheckboxChange = (row: number, col: number, state: CheckboxState) => {
-    const newData = [...editableData];
+    const newData = editableData.map((r) => [...(r ?? [])]);
     if (!newData[row]) newData[row] = [];
 
     const checkboxValue =
@@ -144,16 +144,17 @@ export function FormComponent({
   function getCellNumericValue(raw: string): number {
     if (!raw) return 0;
 
-    if (raw.startsWith("=")) {
-      return parseFloat(raw.slice(1)) || 0;
+    const s = raw.trim();
+
+    // Extract number inside [number:xxx]
+    const numberMatch = s.match(/\[number:\s*([-+]?\d*\.?\d+)\s*\]/i);
+    if (numberMatch) {
+      return parseFloat(numberMatch[1]);
     }
 
-    if (raw.startsWith("[number:")) {
-      const v = raw.match(/^\[number:(.*?)\]$/)?.[1];
-      return parseFloat(v || "0") || 0;
-    }
-
-    return parseFloat(raw) || 0;
+    // Plain numeric fallback
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : 0;
   }
   function cellRefToIndexes(ref: string) {
     const match = ref.match(/^([A-Z]+)(\d+)$/i);
@@ -202,7 +203,7 @@ export function FormComponent({
 
     let expression = formula.slice(1);
 
-    const allValues = formValueStore.getValues();
+    const allValues = storeValues;
 
     // {fieldId}
     expression = expression.replace(/\{(\w+)\}(?!:)/g, (_, fieldId) => {
@@ -268,6 +269,24 @@ export function FormComponent({
       return "ERR";
     }
   }
+  const evaluatedPayload = useMemo(() => {
+    const evaluatedTable = editableData.map((row) =>
+      row.map((cell) => {
+        const raw = (cell ?? "").toString().trim();
+        return raw.startsWith("=") ? evaluateTableFormula(raw, editableData) : cell;
+      })
+    );
+    return JSON.stringify(evaluatedTable);
+  }, [editableData, storeValues]); // ✅ depends on storeValues so it updates when Table 1 changes
+
+  useEffect(() => {
+    // ✅ publish evaluated table even if user didn't edit this table
+    if (formValueStore.getValues()[element.id] !== evaluatedPayload) {
+      formValueStore.setValue(element.id, evaluatedPayload);
+      submitValue?.(element.id, evaluatedPayload);
+    }
+  }, [evaluatedPayload, element.id, submitValue]);
+
 
   const parseCell = (cellValue: string): string => {
     if (cellValue === "[PASS]") return "PASS";
@@ -411,7 +430,7 @@ export function FormComponent({
 
   const CustomInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(DatePickerInput);
   // ← fora do return
-  const occupiedMap: Record<number, Record<number, boolean>> = {};
+  const occupiedMap = useMemo(() => ({} as Record<number, Record<number, boolean>>), [editableData]);
 
 
   return (

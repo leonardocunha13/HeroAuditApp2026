@@ -1,29 +1,26 @@
-// GLOBAL lightweight store (no React context needed)
+// formValueStore.ts
 
 type Listener = () => void;
 
 class FormValueStore {
   private values: Record<string, string> = {};
-  private listeners: Listener[] = [];
+  private listeners = new Set<Listener>();
 
-  setValue(id: string, value: string) {
-    this.values[id] = value;
+  setValue = (id: string, value: string) => {
+    // ✅ create a NEW object reference
+    this.values = { ...this.values, [id]: value };
     this.emit();
-  }
+  };
 
-  getValues() {
-    return this.values;
-  }
+  getValues = () => this.values;
 
-  subscribe(listener: Listener) {
-    this.listeners.push(listener);
-    return () => {
-      this.listeners = this.listeners.filter(l => l !== listener);
-    };
-  }
+  subscribe = (listener: Listener) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
 
   private emit() {
-    this.listeners.forEach(l => l());
+    this.listeners.forEach((l) => l());
   }
 }
 
