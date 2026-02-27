@@ -281,7 +281,8 @@ function FormSubmitComponent({ formUrl, content }: { content: FormElementInstanc
           if (Array.isArray(parsed)) {
             return "0"; // tables require {table:A1}
           }
-        } catch (e) {
+        } catch {
+          // ignore invalid JSON
         }
       }
 

@@ -48,11 +48,13 @@ export function FormComponent({
       try {
         const parsed = JSON.parse(defaultValue);
         if (Array.isArray(parsed)) return parsed as string[][];
-      } catch (e) {
+      } catch {
         // ignore invalid JSON
       }
     }
-    return Array.isArray(element.extraAttributes.data) ? element.extraAttributes.data : [];
+    return Array.isArray(element.extraAttributes.data)
+      ? element.extraAttributes.data
+      : [];
   })();
 
   const [editableData, setEditableData] = useState<string[][]>(initialData);
