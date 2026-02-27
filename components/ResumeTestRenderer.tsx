@@ -193,7 +193,28 @@ function ResumeTestRenderer({
       </div>
     );
   }
+  function buildRows(elements: FormElementInstance[]) {
+    const rows: FormElementInstance[][] = [];
+    let currentRow: FormElementInstance[] = [];
+    let currentWidth = 0;
 
+    elements.forEach(el => {
+      const width = el.width || 100;
+
+      if (currentWidth + width > 100) {
+        rows.push(currentRow);
+        currentRow = [];
+        currentWidth = 0;
+      }
+
+      currentRow.push(el);
+      currentWidth += width;
+    });
+
+    if (currentRow.length) rows.push(currentRow);
+
+    return rows;
+  }
   return (
     <div className="flex justify-center w-full h-full items-center p-8">
       <div className="fixed top-0 left-0 w-full z-50 bg-white border-b border-gray-200 dark:bg-background px-6 py-3 flex justify-between items-center shadow-md">
@@ -238,22 +259,27 @@ function ResumeTestRenderer({
         key={renderKey}
         className="flex flex-col gap-4 flex-grow bg-background w-full h-full p-8 overflow-y-auto border shadow-xl shadow-blue-700 rounded"
       >
-        {Array.isArray(elements) && elements.length > 0 ? (
-          elements.map((element) => {
-            const FormElement = FormElements[element.type].formComponent;
-            return (
-              <FormElement
-                key={element.id}
-                elementInstance={element}
-                submitValue={submitValue}
-                isInvalid={formErrors.current[element.id]}
-                defaultValue={formValues.current[element.id]}
-              />
-            );
-          })
-        ) : (
-          <div className="text-center text-muted-foreground">No form elements to display.</div>
-        )}
+        {buildRows(elements).map((row, rowIndex) => (
+          <div key={rowIndex} className="flex w-full gap-4">
+            {row.map((element) => {
+              const FormElement = FormElements[element.type].formComponent;
+
+              return (
+                <div
+                  key={element.id}
+                  style={{ width: `${element.width || 100}%` }}
+                >
+                  <FormElement
+                    elementInstance={element}
+                    submitValue={submitValue}
+                    isInvalid={formErrors.current[element.id]}
+                    defaultValue={formValues.current[element.id]}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );
