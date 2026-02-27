@@ -23,7 +23,7 @@ import {
   CustomInstance,
   propertiesSchema,
 } from "./CalculationField";
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog";
 
 type FormSchema = z.infer<typeof propertiesSchema>;
 
@@ -270,9 +270,12 @@ export function PropertiesComponent({
               </Button>
             </DialogTrigger>
 
-            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-w-4xl max-h-[80vh] bg-white dark:bg-neutral-900 text-black dark:text-white opacity-100 shadow-xl">
               <DialogHeader>
                 <DialogTitle>Formula Reference Guide</DialogTitle>
+                <DialogDescription>
+                  Reference guide for supported operators and formula syntax.
+                </DialogDescription>
               </DialogHeader>
 
               <div className="mt-4">
@@ -415,6 +418,9 @@ export function PropertiesComponent({
             <DialogContent className="max-w-sm">
               <DialogHeader>
                 <DialogTitle>Select Table Cell</DialogTitle>
+                <DialogDescription>
+                  Reference guide for supported operators and formula syntax.
+                </DialogDescription>
               </DialogHeader>
 
               <div className="space-y-4 mt-4">

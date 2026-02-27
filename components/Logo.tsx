@@ -20,6 +20,7 @@ function Logo() {
         width={75}
         height={35}
         priority
+        className="h-auto w-auto transition-transform duration-300 hover:scale-110"
       />
     </div>
   );

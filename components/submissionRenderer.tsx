@@ -13,7 +13,7 @@ import { toast } from "./ui/use-toast";
 import { Label, Input } from "@aws-amplify/ui-react";
 import { X } from "lucide-react";
 import { ImShare } from "react-icons/im";
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import SignatureCanvas from "react-signature-canvas";
 
 const PDF_SIZES = {
@@ -390,6 +390,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
       });
 
       toast({
+        variant: "default",
         title: "PDF sent!",
         description: `PDF emailed successfully to: ${selectedUsers.join(", ")}`,
       });
@@ -524,7 +525,9 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                 >
                   <DialogHeader className="flex flex-row items-center justify-between">
                     <DialogTitle>Share PDF</DialogTitle>
-
+                    <DialogDescription>
+                      Share PDF with stakeholders via email. You can also include a client stamp on the PDF for added authenticity.
+                    </DialogDescription>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -619,7 +622,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                         {includeStamp && (
                           <div className="flex flex-col gap-3 overflow-y-auto max-h-[70vh]">
                             <Label style={{ fontSize: 14 }}>
-                              Click on the PDF preview to place the stamp. After filling in the details, press "Apply Stamp".
+                              After filling in the details, press "Apply Stamp" and then click on the PDF preview to place the stamp. 
                             </Label>
                             <div>
                               <Label>Reviewed Date</Label>
