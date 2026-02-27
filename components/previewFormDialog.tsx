@@ -14,7 +14,7 @@ try {
 }
 
   return (
-        <div className="bg-accent flex flex-col flex-grow items-center p-4 bg-[url(/paper.svg)] dark:bg-[url(/paper-dark.svg)] overflow-y-auto">
+        <div className="bg-accent flex flex-col flex-grow items-center p-4  overflow-y-auto">
           <div className="max-w-[1500px] flex flex-wrap w-full gap-4 p-8 bg-background rounded-2xl content-start">
             {elements.map((element) => {
               const FormComponent = FormElements[element.type].formComponent;
