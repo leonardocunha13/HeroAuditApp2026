@@ -354,9 +354,11 @@ export function FormComponent({
     );
   }
 
+  const CustomInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(DatePickerInput);
+  // ← fora do return
+  const occupiedMap = useMemo(() => ({} as Record<number, Record<number, boolean>>), [editableData]);
   const minWidth = 1;
   const maxWidth = 200;
-
   if (pdf) {
     return (
       <div>
@@ -428,9 +430,6 @@ export function FormComponent({
     return <Input ref={ref} {...props} />;
   }
 
-  const CustomInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(DatePickerInput);
-  // ← fora do return
-  const occupiedMap = useMemo(() => ({} as Record<number, Record<number, boolean>>), [editableData]);
 
 
   return (
