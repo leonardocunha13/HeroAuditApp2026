@@ -156,10 +156,7 @@ function renderFieldValue(element: FormElementInstance, value: unknown, allValue
 
       if (!imageUrl) return <Text>[Invalid image]</Text>;
 
-      const width = element.extraAttributes?.width;
-      const height = element.extraAttributes?.height;
       const alignment = element.extraAttributes?.position ?? "left";
-      const preserveOriginalSize = element.extraAttributes?.preserveOriginalSize;
 
       let alignStyle = {};
       if (alignment === "center") {
@@ -170,19 +167,12 @@ function renderFieldValue(element: FormElementInstance, value: unknown, allValue
         alignStyle = { alignSelf: "flex-start" };
       }
 
-      const imageStyle = preserveOriginalSize
-        ? {
-          objectFit: "contain",
-          width: "200px",
-          height: "80px",
-          ...alignStyle,
-        }
-        : {
-          objectFit: "contain",
-          width,
-          height,
-          ...alignStyle,
-        };
+      const imageStyle = {
+        objectFit: "contain" as const,
+        width: 440,
+        height: 176,
+        ...alignStyle,
+      };
 
       return <Image src={imageUrl} style={imageStyle} />;
     }
