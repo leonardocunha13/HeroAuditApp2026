@@ -17,11 +17,11 @@ function DesignerSidebar() {
       padding={tokens.space.medium}
       style={{
         borderLeft: `1px solid ${tokens.colors.border.primary}`,
-        position: "sticky",
-        top: 0,                 // ⭐ REQUIRED
-        height: "100vh",
+
+        height: "100%",
         overflowY: "auto",      // ⭐ allows internal scrolling
         transition: "width 0.3s ease",
+        flexShrink: 0,
       }}
     >
       {!selectedElement && <FormElementsSidebar />}

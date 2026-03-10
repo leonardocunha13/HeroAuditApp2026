@@ -236,7 +236,7 @@ function Designer() {
   });
 
   return (
-    <div className="flex w-full items-start h-full">
+    <div className="flex w-full h-full overflow-hidden">
       <div
         className="p-4 w-full"
         onClick={() => {

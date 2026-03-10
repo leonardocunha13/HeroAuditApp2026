@@ -100,7 +100,7 @@ function FormBuilder({ formID, form, equipmentName, clientName, formName, revisi
             return () => clearTimeout(readyTimeout);
         }
     }, [form, setElements, isReady, setSelectedElement]);
-    
+
 
     if (!isReady) {
         return (
@@ -165,8 +165,8 @@ function FormBuilder({ formID, form, equipmentName, clientName, formName, revisi
 
     return (
         <DndContext sensors={sensors}>
-            <main className="flex flex-col w-full">
-                <nav className="flex justify-between border-b-2 p-4 gap-3 items-center">
+            <main className="flex flex-col h-screen w-full overflow-hidden">
+                <nav className="sticky top-0 z-30 flex justify-between border-b-2 p-4 gap-3 items-center bg-background">
                     <h2 className="truncate font-medium">
                         <span className="text-muted-foreground mr-2">Form:</span>
                         {formName}
@@ -186,7 +186,8 @@ function FormBuilder({ formID, form, equipmentName, clientName, formName, revisi
                         <PublishFormBtn id={formID} />
                     </div>
                 </nav>
-                <div className="flex w-full flex-grow relative min-h-0 bg-accent">
+
+                <div className="flex flex-1 min-h-0 w-full bg-accent overflow-hidden">
                     <Designer />
                 </div>
             </main>
