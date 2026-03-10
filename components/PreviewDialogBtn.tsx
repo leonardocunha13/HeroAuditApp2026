@@ -17,19 +17,19 @@ function PreviewDialogBtn() {
         </Button>
       </DialogTrigger>
       <DialogContent className="w-screen h-screen max-h-screen max-w-full flex flex-col p-0 pt-8 gap-0 opacity-100">
-        <DialogHeader className="px-4 py-4 border-b">
-          <DialogTitle>Form preview</DialogTitle>
-          <DialogDescription>
-            This is how your form will look to your users.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex justify-between items-center px-4 py-4 border-b opacity-100">
-          
-          <DialogClose className="mt-2 sm:mt-4 md:mt-8 relative rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+        <DialogHeader className="px-4 py-4 border-b flex flex-row items-start justify-between">
+          <div>
+            <DialogTitle>Form preview</DialogTitle>
+            <DialogDescription>
+              This is how your form will look to your users.
+            </DialogDescription>
+          </div>
+
+          <DialogClose className="rounded-sm opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
             <Cross2Icon className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </DialogClose>
-        </div>
+        </DialogHeader>
         <div className="bg-accent flex flex-col flex-grow items-center p-4  overflow-y-auto">
           <div className="max-w-[1500px] flex flex-wrap w-full gap-4 p-8 bg-background rounded-2xl content-start">
             {elements.map((element) => {
