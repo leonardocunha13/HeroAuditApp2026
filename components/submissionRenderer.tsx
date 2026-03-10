@@ -194,7 +194,47 @@ function resolveTablesForPDF(responses: Record<string, unknown>) {
     if (!formula.startsWith("=")) return formula;
 
     let expr = formula.slice(1);
+    // {fieldId}
+    expr = expr.replace(/\{([\w-]+)\}(?!:)/g, (_, fieldId) => {
+      const value = resolved[fieldId];
 
+      if (value === undefined || value === null) return "0";
+
+      const n = Number(String(value));
+      return Number.isFinite(n) ? String(n) : "0";
+    });
+
+    // {tableId:A1}
+    expr = expr.replace(/\{([\w-]+):([A-Z]+\d+)\}/g, (_, tableId, cellRef) => {
+      const tableValue = resolved[tableId];
+      if (!tableValue) return "0";
+
+      let table: Table;
+
+      try {
+        table =
+          typeof tableValue === "string"
+            ? JSON.parse(tableValue)
+            : tableValue;
+      } catch {
+        return "0";
+      }
+
+      if (!Array.isArray(table)) return "0";
+
+      const pos = cellRefToRC(cellRef);
+      if (!pos) return "0";
+
+      const raw = stripMerge(String(table[pos.r]?.[pos.c] ?? ""));
+
+      if (raw.startsWith("=")) {
+        const next = new Set(visiting);
+        next.add(`${tableId}:${pos.r}:${pos.c}`);
+        return evalFormula(raw, table, next);
+      }
+
+      return String(getNumeric(raw));
+    });
     expr = expr.replace(/\b([A-Z]+\d+)\b/g, (cellRef) => {
       const pos = cellRefToRC(cellRef);
       if (!pos) return "0";
