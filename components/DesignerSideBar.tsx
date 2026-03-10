@@ -8,7 +8,7 @@ function DesignerSidebar() {
   const { tokens } = useTheme();
 
   // Set width depending on state
-  const sidebarWidth = selectedElement ? "50%" : "10%"; // wider for properties
+  const sidebarWidth = selectedElement ? "30%" : "10%"; // wider for properties
 
   return (
     <View
