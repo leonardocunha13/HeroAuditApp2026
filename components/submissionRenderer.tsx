@@ -149,6 +149,121 @@ const PDFImagePreview = React.memo(({
   );
 });
 
+function resolveTablesForPDF(responses: Record<string, unknown>) {
+  const resolved: Record<string, unknown> = { ...responses };
+
+  type TableCell = string | number | null;
+  type TableRow = TableCell[];
+  type Table = TableRow[];
+
+  const stripMerge = (s: string) =>
+    s.replace(/^\[merge:(right|down):\d+\]/, "").trim();
+
+  const getNumeric = (raw: unknown): number => {
+    if (raw === null || raw === undefined) return 0;
+
+    const s = stripMerge(String(raw).trim());
+
+    const m = s.match(/\[number:\s*([-+]?\d*\.?\d+)\s*\]/i);
+    if (m) return parseFloat(m[1]);
+
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const cellRefToRC = (ref: string) => {
+    const m = ref.match(/^([A-Z]+)(\d+)$/i);
+    if (!m) return null;
+
+    const letters = m[1].toUpperCase();
+    const r = Number(m[2]) - 1;
+
+    let c = 0;
+    for (let i = 0; i < letters.length; i++) {
+      c = c * 26 + (letters.charCodeAt(i) - 64);
+    }
+
+    return { r, c: c - 1 };
+  };
+
+  const evalFormula = (
+    formula: string,
+    table: Table,
+    visiting = new Set<string>()
+  ): string => {
+    if (!formula.startsWith("=")) return formula;
+
+    let expr = formula.slice(1);
+
+    expr = expr.replace(/\b([A-Z]+\d+)\b/g, (cellRef) => {
+      const pos = cellRefToRC(cellRef);
+      if (!pos) return "0";
+
+      const key = `${pos.r}:${pos.c}`;
+      if (visiting.has(key)) return "0";
+
+      const raw = stripMerge(String(table[pos.r]?.[pos.c] ?? "").trim());
+
+      if (raw.startsWith("=")) {
+        const next = new Set(visiting);
+        next.add(key);
+        const v = evalFormula(raw, table, next);
+        return String(getNumeric(v));
+      }
+
+      return String(getNumeric(raw));
+    });
+
+    expr = expr.replace(/\^/g, "**");
+
+    const ROUND = (value: number, decimals = 0) => {
+      const factor = Math.pow(10, decimals);
+      return Math.round(value * factor) / factor;
+    };
+
+    const DEG = (rad: number) => (rad * 180) / Math.PI;
+    const RAD = (deg: number) => (deg * Math.PI) / 180;
+
+    try {
+      return String(
+        Function("Math", "ROUND", "DEG", "RAD", `"use strict"; return (${expr})`)(
+          Math,
+          ROUND,
+          DEG,
+          RAD
+        )
+      );
+    } catch {
+      return "ERR";
+    }
+  };
+
+  for (const key in resolved) {
+    const value = resolved[key];
+    if (typeof value !== "string") continue;
+
+    try {
+      const parsed = JSON.parse(value) as Table;
+      if (!Array.isArray(parsed)) continue;
+
+      const evaluated: Table = parsed.map((row) =>
+        (row ?? []).map((cell) => {
+          const raw = stripMerge(String(cell ?? "").trim());
+          if (raw.startsWith("=")) return evalFormula(raw, parsed);
+          return cell;
+        })
+      );
+
+      resolved[key] = JSON.stringify(evaluated);
+    } catch {
+      // not a table JSON
+    }
+  }
+
+  return resolved;
+}
+
+
 export default function SubmissionRenderer({ submissionID, elements, responses }: Props) {
   const [formName, setFormName] = useState<string>("Loading...");
   const [equipmentName, setEquipmentName] = useState<string>("Loading...");
@@ -267,7 +382,10 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     [pageGroups]
   );
 
-  const memoResponses = useMemo(() => responses, [responses]);
+  const memoResponses = useMemo(
+    () => resolveTablesForPDF(responses),
+    [responses]
+  );
 
   const memoStamp = useMemo(() => {
     if (!includeStamp) return undefined;
@@ -281,10 +399,11 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
   const handleExportPDF = async () => {
     setLoading(true);
     const resolvedGroups = await prepareResolvedElements(pageGroups);
+    const resolvedResponses = resolveTablesForPDF(responses);
     const blob = await pdf(
       <PDFDocument
         elements={resolvedGroups}
-        responses={responses}
+        responses={resolvedResponses}
         formName={formName}
         revision={revision}
         orientation={orientation}
@@ -327,11 +446,11 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     setPdfLoading(true);
     try {
       const resolvedGroups = await prepareResolvedElements(pageGroups);
-
+      const resolvedResponses = resolveTablesForPDF(responses);
       const blob = await pdf(
         <PDFDocument
           elements={resolvedGroups}
-          responses={responses}
+          responses={resolvedResponses}
           formName={formName}
           revision={revision}
           orientation={orientation}
@@ -622,7 +741,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                         {includeStamp && (
                           <div className="flex flex-col gap-3 overflow-y-auto max-h-[70vh]">
                             <Label style={{ fontSize: 14 }}>
-                              After filling in the details, press "Apply Stamp" and then click on the PDF preview to place the stamp. 
+                              After filling in the details, press "Apply Stamp" and then click on the PDF preview to place the stamp.
                             </Label>
                             <div>
                               <Label>Reviewed Date</Label>
@@ -816,7 +935,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                 <div key={rowIndex} className="flex w-full gap-4">
                   {row.map((element) => {
                     const FormComponent = FormElements[element.type].formComponent;
-                    const rawValue = responses[element.id];
+                    const rawValue = memoResponses[element.id];
                     const value =
                       rawValue !== undefined && rawValue !== null
                         ? String(rawValue)

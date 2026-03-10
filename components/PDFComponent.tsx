@@ -147,7 +147,7 @@ const stylesStamp = StyleSheet.create({
 });
 
 
-function renderFieldValue(element: FormElementInstance, value: unknown) {
+function renderFieldValue(element: FormElementInstance, value: unknown, allValues: Record<string, unknown>) {
 
   switch (element.type) {
     case "ImageField": {
@@ -189,7 +189,143 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
 
     case "TableField": {
       const headerRowIndexes: number[] = element.extraAttributes?.headerRowIndexes || [];
+      const getCellNumericValuePdf = (raw: unknown): number => {
+        if (raw === null || raw === undefined) return 0;
+        const s = String(raw).trim();
+        if (!s) return 0;
 
+        // If still a formula string, treat as 0 here (we evaluate formulas separately)
+        if (s.startsWith("=")) return 0;
+
+        const m = s.match(/\[number:\s*([-+]?\d*\.?\d+)\s*\]/i);
+        if (m) {
+          const n = Number(m[1]);
+          return Number.isFinite(n) ? n : 0;
+        }
+
+        // other tags
+        if (s.startsWith("[")) return 0;
+
+        const n = Number(s);
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      const cellRefToIndexesPdf = (ref: string) => {
+        const match = ref.match(/^([A-Z]+)(\d+)$/i);
+        if (!match) return null;
+        const letters = match[1].toUpperCase();
+        const row = Number(match[2]) - 1;
+
+        let col = 0;
+        for (let i = 0; i < letters.length; i++) col = col * 26 + (letters.charCodeAt(i) - 64);
+        col -= 1;
+
+        return { row, col };
+      };
+
+      const evalCellPdf = (
+        table: string[][],
+        row: number,
+        col: number,
+        allValues: Record<string, unknown>,
+        visited: Set<string>
+      ): string => {
+        const key = `self:${row}:${col}`;
+        if (visited.has(key)) return "CIRC";
+
+        const raw = (table[row]?.[col] ?? "").toString().trim();
+        if (!raw) return "0";
+
+        // strip merge prefix if present
+        const cleaned = raw.replace(/^\[merge:(right|down):\d+\]/, "").trim();
+
+        if (cleaned.startsWith("=")) {
+          const next = new Set(visited);
+          next.add(key);
+          return evaluateTableFormulaPdf(cleaned, table, allValues, next);
+        }
+
+        return String(getCellNumericValuePdf(cleaned));
+      };
+
+      const evaluateTableFormulaPdf = (
+        formula: string,
+        currentTable: string[][],
+        allValues: Record<string, unknown>,
+        visited = new Set<string>()
+      ): string => {
+        if (!formula.startsWith("=")) return formula;
+
+        // use formula string as part of loop-break (good enough)
+        const loopKey = `f:${formula}`;
+        if (visited.has(loopKey)) return "CIRC";
+
+        const nextVisited = new Set(visited);
+        nextVisited.add(loopKey);
+
+        let expression = formula.slice(1);
+
+        // {fieldId} numeric fields only
+        expression = expression.replace(/\{(\w+)\}(?!:)/g, (_, fieldId) => {
+          const v = allValues[fieldId];
+          const n = Number(String(v));
+          return Number.isFinite(n) ? String(n) : "0";
+        });
+
+        // {TABLEID:A1}
+        expression = expression.replace(/\{(\w+):([A-Z]+\d+)\}/g, (_, fieldId, cellRef) => {
+          const tableValue = allValues[String(fieldId)];
+          if (!tableValue) return "0";
+
+          let table: string[][];
+          try {
+            table = typeof tableValue === "string" ? JSON.parse(tableValue) : (tableValue as string[][]);
+          } catch {
+            return "0";
+          }
+          if (!Array.isArray(table)) return "0";
+
+          const pos = cellRefToIndexesPdf(cellRef);
+          if (!pos) return "0";
+
+          const raw = (table[pos.row]?.[pos.col] ?? "").toString().trim();
+          const cleaned = raw.replace(/^\[merge:(right|down):\d+\]/, "").trim();
+
+          if (cleaned.startsWith("=")) {
+            return evaluateTableFormulaPdf(cleaned, table, allValues, nextVisited);
+          }
+          return String(getCellNumericValuePdf(cleaned));
+        });
+
+        // Same-table refs A1, B2, etc
+        expression = expression.replace(/\b([A-Z]+\d+)\b/g, (_, cellRef) => {
+          const pos = cellRefToIndexesPdf(cellRef);
+          if (!pos) return "0";
+          return evalCellPdf(currentTable, pos.row, pos.col, allValues, nextVisited);
+        });
+
+        expression = expression.replace(/\^/g, "**");
+
+        try {
+          const ROUND = (value: number, decimals = 0) => {
+            const factor = Math.pow(10, decimals);
+            return Math.round(value * factor) / factor;
+          };
+          const DEG = (rad: number) => (rad * 180) / Math.PI;
+          const RAD = (deg: number) => (deg * Math.PI) / 180;
+
+          const result = Function("Math", "ROUND", "DEG", "RAD", `"use strict"; return (${expression})`)(
+            Math,
+            ROUND,
+            DEG,
+            RAD
+          );
+
+          return String(result);
+        } catch {
+          return "ERR";
+        }
+      };
       const parseMaybeTable = (v: unknown): string[][] | null => {
         if (!v) return null;
         if (Array.isArray(v)) return v as string[][];
@@ -211,6 +347,24 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
 
       if (!tableData) return <Text>[Invalid table]</Text>;
 
+
+      const evaluatedTableData: string[][] = tableData.map((row) =>
+        row.map((cell) => {
+          const raw = (cell ?? "").toString();
+          const trimmed = raw.trim();
+
+          const mergePrefix = trimmed.match(/^\[merge:(right|down):\d+\]/)?.[0] ?? "";
+          const cleaned = trimmed.replace(/^\[merge:(right|down):\d+\]/, "").trim();
+
+          if (cleaned.startsWith("=")) {
+            const evaluated = evaluateTableFormulaPdf(cleaned, tableData, allValues);
+            // preserve merge prefix so your merge/border logic still works
+            return mergePrefix ? `${mergePrefix}${evaluated}` : evaluated;
+          }
+
+          return raw;
+        })
+      );
       const rows = tableData.length;
       const columns = Math.max(...tableData.map((row: string[]) => row.length), 0);
       const isCompactMode = columns > 10;
@@ -316,7 +470,7 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
       };
 
 
-      const columnWidths = estimateColumnWidths(tableData, columns, columnHeaders);
+      const columnWidths = estimateColumnWidths(evaluatedTableData, columns, columnHeaders);
       const compactStyles = {
         table: {
           borderColor: "#000",
@@ -444,9 +598,13 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
                   let colIndex = 0;
 
                   while (colIndex < columns) {
-                    const rawCellValue = tableData[rowIndex]?.[colIndex] || "";
-                    const cellText = parseCell(rawCellValue);
-                    const rawTrimmed = rawCellValue.trim();
+                    const rawCellValueOriginal = tableData[rowIndex]?.[colIndex] || "";          // merge/borders
+                    const rawCellValueDisplay = evaluatedTableData[rowIndex]?.[colIndex] || ""; // what you show
+                    const displayTrimmed = rawCellValueDisplay.trim();
+                    const displayMergeMatch = displayTrimmed.match(/^\[merge:(right|down):\d+\](.*)/);
+                    const cleanedValueDisplay = displayMergeMatch ? displayMergeMatch[2]?.trim() : displayTrimmed;
+                    const cellText = parseCell(rawCellValueDisplay);
+                    const rawTrimmed = rawCellValueOriginal.trim();
                     const mergePrefixMatch = rawTrimmed.match(/^\[merge:(right|down):\d+\](.*)/);
                     const span = isMergedRight(rawTrimmed) ? getMergeRightSpan(rawTrimmed) : 1;
 
@@ -503,41 +661,41 @@ function renderFieldValue(element: FormElementInstance, value: unknown) {
                     }
 
                     let rightBorder = "1pt solid black";
-                    if (isMergedRight(rawCellValue)) rightBorder = "1pt solid black";
+                    if (isMergedRight(rawCellValueOriginal)) rightBorder = "1pt solid black";
                     const isShortText =
-                      cleanedValue.length > 0 &&
-                      cleanedValue.length <= 3 &&
+                      cleanedValueDisplay.length > 0 &&
+                      cleanedValueDisplay.length <= 3 &&
                       isNaN(Number(cleanedValue));
                     const isEuropeanNumber =
-                      /^[0-9]{1,3}(\.[0-9]{3})*,[0-9]+$/.test(cleanedValue) ||
-                      /^[0-9]+,[0-9]+$/.test(cleanedValue) ||
-                      /^[0-9]+,[0-9]{3}$/.test(cleanedValue) ||
-                      /^-?\d+(?:\.\d{3})*,\d+$/.test(cleanedValue);
-                    const isImage = cleanedValue.startsWith("[image:");
-                    const imageBase64 = cleanedValue.match(/^\[image:(data:image\/[a-zA-Z]+;base64,.*?)\]$/)?.[1];
+                      /^[0-9]{1,3}(\.[0-9]{3})*,[0-9]+$/.test(cleanedValueDisplay) ||
+                      /^[0-9]+,[0-9]+$/.test(cleanedValueDisplay) ||
+                      /^[0-9]+,[0-9]{3}$/.test(cleanedValueDisplay) ||
+                      /^-?\d+(?:\.\d{3})*,\d+$/.test(cleanedValueDisplay);
+                    const isImage = cleanedValueDisplay.startsWith("[image:");
+                    const imageBase64 = cleanedValueDisplay.match(/^\[image:(data:image\/[a-zA-Z]+;base64,.*?)\]$/)?.[1];
                     const isCenteredCell =
-                      ["[checkbox:true]", "[checkbox:false]", "[checkbox]"].includes(cleanedValue) ||
-                      cleanedValue.startsWith("[select") ||
-                      cleanedValue.startsWith("[number:") ||
-                      cleanedValue.startsWith("[date:") ||
-                      !isNaN(Number(cleanedValue)) ||
+                      ["[checkbox:true]", "[checkbox:false]", "[checkbox]"].includes(cleanedValueDisplay) ||
+                      cleanedValueDisplay.startsWith("[select") ||
+                      cleanedValueDisplay.startsWith("[number:") ||
+                      cleanedValueDisplay.startsWith("[date:") ||
+                      !isNaN(Number(cleanedValueDisplay)) ||
                       isEuropeanNumber ||
-                      /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValue) ||
-                      /^[0-9]+(,[0-9]+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValue) ||
-                      /^-?\d+(\.\d+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValue) ||
-                      /^-?\d+,\d+\s*[a-zA-Z]{1,3}$/.test(cleanedValue) ||
-                      !isNaN(Number(cleanedValue)) ||
-                      /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{1}$/.test(cleanedValue) ||
-                      /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{2}$/.test(cleanedValue) ||
-                      /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{3}$/.test(cleanedValue) ||
+                      /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValueDisplay) ||
+                      /^[0-9]+(,[0-9]+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValueDisplay) ||
+                      /^-?\d+(\.\d+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValueDisplay) ||
+                      /^-?\d+,\d+\s*[a-zA-Z]{1,3}$/.test(cleanedValueDisplay) ||
+                      !isNaN(Number(cleanedValueDisplay)) ||
+                      /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{1}$/.test(cleanedValueDisplay) ||
+                      /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{2}$/.test(cleanedValueDisplay) ||
+                      /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{3}$/.test(cleanedValueDisplay) ||
                       isShortText ||
-                      /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValue) ||
-                      /^[0-9]+(,[0-9]+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValue) ||
-                      /^-?\d+(\.\d+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValue) ||
-                      /^-?\d+,\d+\s*[a-zA-Z]{1,3}$/.test(cleanedValue);
+                      /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValueDisplay) ||
+                      /^[0-9]+(,[0-9]+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValueDisplay) ||
+                      /^-?\d+(\.\d+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValueDisplay) ||
+                      /^-?\d+,\d+\s*[a-zA-Z]{1,3}$/.test(cleanedValueDisplay);
                     let bottomBorder = "1pt solid black";
-                    if (isMergedDown(rawCellValue)) {
-                      const span = getMergeDownSpan(rawCellValue);
+                    if (isMergedDown(rawCellValueOriginal)) {
+                      const span = getMergeDownSpan(rawCellValueOriginal);
                       const endRow = rowIndex + span - 1;
                       if (endRow !== rowIndex + span - 1 || rowIndex !== rows - 1) {
                         bottomBorder = "none";
@@ -880,7 +1038,7 @@ export default function PDFDocument({ elements, responses, formName, revision, o
                       {el.type === "ImageField" ? (
                         <Image src={el.extraAttributes?.imageUrl} style={imageStyle} />
                       ) : (
-                        renderFieldValue(el, value)
+                        renderFieldValue(el, value, responses)
                       )}
                     </View>
                   );
@@ -933,7 +1091,7 @@ export default function PDFDocument({ elements, responses, formName, revision, o
                           </Text>
                         )}
 
-                      {renderFieldValue(element, value)}
+                      {renderFieldValue(element, value, responses)}
                     </View>
                   );
                 })}

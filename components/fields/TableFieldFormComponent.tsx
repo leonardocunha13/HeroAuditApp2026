@@ -55,8 +55,26 @@ export function FormComponent({
       ? element.extraAttributes.data
       : [];
   })();
+   const [editableData, setEditableData] = useState<string[][]>(initialData);
+  const storeValues = useSyncExternalStore(
+    (listener) => formValueStore.subscribe(listener),
+    () => formValueStore.getValues(),
+    () => formValueStore.getValues()
+  );
+  const displayData = useMemo(() => {
+  if (!readOnly) return editableData;
 
-  const [editableData, setEditableData] = useState<string[][]>(initialData);
+  return editableData.map((row) =>
+    row.map((cell) => {
+      const raw = (cell ?? "").toString().trim();
+      return raw.startsWith("=")
+        ? evaluateTableFormula(raw, editableData)
+        : cell;
+    })
+  );
+}, [editableData, readOnly, storeValues]);
+ 
+
 
   const [editableCells] = useState(() =>
     Array.from({ length: rows }, (_, row) =>
@@ -68,54 +86,40 @@ export function FormComponent({
     const evaluatedTable = data.map((row) =>
       row.map((cell) => {
         const raw = (cell ?? "").toString().trim();
-
-        if (raw.startsWith("=")) {
-          return evaluateTableFormula(raw, data);
-        }
+        if (raw.startsWith("=")) return evaluateTableFormula(raw, data);
         return cell;
       })
     );
 
     const payload = JSON.stringify(evaluatedTable);
 
-    // ✅ this is what CalculationField reads
+    // ✅ CalculationField reads this
     formValueStore.setValue(element.id, payload);
-
-    // ✅ IMPORTANT: also submit the evaluated version
-    if (submitValue) {
-      submitValue(element.id, payload);
-    }
   };
 
   const updateData = (newData: string[][]) => {
     setEditableData(newData);
 
-    // ✅ persist evaluated to store + submit
+    // ✅ keep store updated for calculations
     persistEvaluatedTable(newData);
 
-    // keep raw formulas saved in element (so the table UI still shows formulas)
+    // ✅ save RAW table so formulas still exist after reload
+    submitValue?.(element.id, JSON.stringify(newData));
+
+    // keep raw formulas saved in element too (designer mode)
     if (!readOnly && updateElement) {
       updateElement(element.id, {
         ...element,
-        extraAttributes: {
-          ...element.extraAttributes,
-          data: newData,
-        },
+        extraAttributes: { ...element.extraAttributes, data: newData },
       });
     }
   };
-
-  // ✅ initialize once so calc fields work even before any edits
   useEffect(() => {
     persistEvaluatedTable(editableData);
+    submitValue?.(element.id, JSON.stringify(editableData));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const storeValues = useSyncExternalStore(
-    (listener) => formValueStore.subscribe(listener),
-    () => formValueStore.getValues(),
-    () => formValueStore.getValues()
-  );
 
   const handleCellChange = (row: number, col: number, value: string) => {
     const newData = editableData.map((r) => [...(r ?? [])]);
@@ -283,7 +287,7 @@ export function FormComponent({
     // ✅ publish evaluated table even if user didn't edit this table
     if (formValueStore.getValues()[element.id] !== evaluatedPayload) {
       formValueStore.setValue(element.id, evaluatedPayload);
-      submitValue?.(element.id, evaluatedPayload);
+
     }
   }, [evaluatedPayload, element.id, submitValue]);
 
@@ -359,6 +363,16 @@ export function FormComponent({
   const occupiedMap = useMemo(() => ({} as Record<number, Record<number, boolean>>), [editableData]);
   const minWidth = 1;
   const maxWidth = 200;
+
+  const pdfTable = useMemo(() => {
+    return editableData.map((row) =>
+      row.map((cell) => {
+        const raw = (cell ?? "").toString().trim();
+        return raw.startsWith("=") ? evaluateTableFormula(raw, editableData) : cell;
+      })
+    );
+  }, [editableData, storeValues]);
+
   if (pdf) {
     return (
       <div>
@@ -393,7 +407,7 @@ export function FormComponent({
                 }}
               >
                 {Array.from({ length: columns }, (_, col) => {
-                  const cellValue = editableData[row]?.[col] || "";
+                  const cellValue = pdfTable[row]?.[col] ?? "";
                   return (
                     <td
                       key={col}
@@ -483,7 +497,7 @@ export function FormComponent({
                 }`}
             >
               {Array.from({ length: columns }, (_, col) => {
-                const cellValue = editableData[row]?.[col] || "";
+                const cellValue = displayData[row]?.[col] || "";
                 let isSelectValue = "";
                 let isSelectOptionsArray: string[] = [];
                 if (occupiedMap[row]?.[col]) {
@@ -701,12 +715,8 @@ export function FormComponent({
                       />
                     ) : isFormula ? (
                       <div
-                        className="break-words bg-yellow-50 font-medium"
-                        style={{
-                          whiteSpace: "pre-wrap",
-                          wordBreak: "break-word",
-                          lineHeight: "1.2",
-                        }}
+                        className={`break-words font-medium ${readOnly ? "" : "bg-yellow-50"}`}
+                        style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: "1.2" }}
                       >
                         {evaluateTableFormula(rawContent, editableData)}
                       </div>
