@@ -22,13 +22,6 @@ import { CameraCell } from "../CameraCell"
 import { Textarea } from "../ui/textarea";
 import Image from "next/image"; // ✅ Import next/image
 import { formValueStore } from "../formValueStore";
-import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
 
 export function FormComponent({
   elementInstance,
@@ -62,25 +55,25 @@ export function FormComponent({
       ? element.extraAttributes.data
       : [];
   })();
-  const [editableData, setEditableData] = useState<string[][]>(initialData);
+   const [editableData, setEditableData] = useState<string[][]>(initialData);
   const storeValues = useSyncExternalStore(
     (listener) => formValueStore.subscribe(listener),
     () => formValueStore.getValues(),
     () => formValueStore.getValues()
   );
   const displayData = useMemo(() => {
-    if (!readOnly) return editableData;
+  if (!readOnly) return editableData;
 
-    return editableData.map((row) =>
-      row.map((cell) => {
-        const raw = (cell ?? "").toString().trim();
-        return raw.startsWith("=")
-          ? evaluateTableFormula(raw, editableData)
-          : cell;
-      })
-    );
-  }, [editableData, readOnly, storeValues]);
-
+  return editableData.map((row) =>
+    row.map((cell) => {
+      const raw = (cell ?? "").toString().trim();
+      return raw.startsWith("=")
+        ? evaluateTableFormula(raw, editableData)
+        : cell;
+    })
+  );
+}, [editableData, readOnly, storeValues]);
+ 
 
 
   const [editableCells] = useState(() =>
@@ -367,7 +360,7 @@ export function FormComponent({
 
   const CustomInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(DatePickerInput);
   // ← fora do return
-  const occupiedMap: Record<number, Record<number, boolean>> = {};
+  const occupiedMap = useMemo(() => ({} as Record<number, Record<number, boolean>>), [editableData]);
   const minWidth = 1;
   const maxWidth = 200;
 
@@ -449,77 +442,6 @@ export function FormComponent({
     ref: React.Ref<HTMLInputElement>
   ) {
     return <Input ref={ref} {...props} />;
-  }
-
-  function MergeCellDialog({
-    row,
-    col,
-    handleCellChange,
-  }: {
-    row: number;
-    col: number;
-    handleCellChange: (row: number, col: number, value: string) => void;
-  }) {
-    const [direction, setDirection] = useState<"right" | "down">("right");
-    const [span, setSpan] = useState(2);
-    const [content, setContent] = useState("");
-
-    const applyMerge = () => {
-      handleCellChange(row, col, `[merge:${direction}:${span}]${content}`);
-    };
-
-    return (
-      <Dialog>
-        <DialogTrigger asChild>
-          <button className="px-2 py-1 border rounded text-xs">
-            Merge
-          </button>
-        </DialogTrigger>
-
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Merge Cells</DialogTitle>
-          </DialogHeader>
-
-          <div className="flex flex-col gap-3">
-
-            <Select
-              value={direction}
-              onValueChange={(v) => setDirection(v as "right" | "down")}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-
-              <SelectContent>
-                <SelectItem value="right">Merge Right</SelectItem>
-                <SelectItem value="down">Merge Down</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Input
-              type="number"
-              value={span}
-              min={2}
-              onChange={(e) => setSpan(Number(e.target.value))}
-            />
-
-            <Textarea
-              placeholder="Cell content"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-            />
-
-            <button
-              className="bg-blue-600 text-white px-3 py-1 rounded"
-              onClick={applyMerge}
-            >
-              Apply Merge
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
   }
 
   return (
@@ -783,20 +705,12 @@ export function FormComponent({
                       </div>
 
                     ) : (!readOnly && (editableCells[row][col] || isOnlyMergeTag)) ? (
-                      <div className="flex flex-col gap-1">
-                        <Textarea
-                          className="whitespace-pre-wrap break-words w-full min-h-[60px] p-2 border rounded resize-y"
-                          value={content}
-                          onChange={(e) => handleCellChange(row, col, e.target.value)}
-                          onKeyDown={(e) => e.stopPropagation()}
-                        />
-
-                        <MergeCellDialog
-                          row={row}
-                          col={col}
-                          handleCellChange={handleCellChange}
-                        />
-                      </div>
+                      <Textarea
+                        className="whitespace-pre-wrap break-words w-full min-h-[60px] p-2 border rounded resize-y"
+                        value={content}
+                        onChange={(e) => handleCellChange(row, col, e.target.value)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
                     ) : isFormula ? (
                       <div
                         className={`break-words font-medium ${readOnly ? "" : "bg-yellow-50"}`}

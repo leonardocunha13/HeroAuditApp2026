@@ -640,49 +640,60 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
         </div>
       )}
 
-      {mergeBuilderOpen && activeCell?.row === mergeBuilderOpen.row && activeCell?.col === mergeBuilderOpen.col && (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className="cell-modal fixed  z-50 bg-white border rounded-lg p-2 shadow-lg flex items-center gap-2"
-          style={{
-            top: (activeCell.rect?.top ?? 0) + window.scrollY - 90,
-            left: (activeCell.rect?.left ?? 0) + window.scrollX,
-          }}
-        >
-          <label className="text-sm">Merge {mergeBuilderOpen.direction}:</label>
-          <Input
-            type="number"
-            min={2}
-            max={10}
-            value={mergeCount}
-            onChange={(e) => setMergeCount(Number(e.target.value))}
-            className="border rounded px-1 w-16"
-          />
-          <Button
-            size="sm"
-            onClick={() => {
-              if (!mergeBuilderOpen) return;
-              const { row, col, direction } = mergeBuilderOpen;
-              const tag = `[merge:${direction}:${mergeCount}]`;
-              const newData = [...data];
-              newData[row][col] = (newData[row][col] || "") + tag;
+      {mergeBuilderOpen && (
+        <div className="cell-modal fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-[400px] space-y-4">
+            <h3 className="font-semibold text-lg">
+              {mergeBuilderOpen.direction === "right" ? "Merge Right" : "Merge Down"}
+            </h3>
 
-              setData(newData);
+            <div>
+              <label className="text-sm">
+                {mergeBuilderOpen.direction === "right"
+                  ? "How many columns?"
+                  : "How many rows?"}
+              </label>
+              <Input
+                type="number"
+                min={2}
+                max={10}
+                value={mergeCount}
+                onChange={(e) => setMergeCount(Number(e.target.value))}
+              />
+            </div>
 
-              updateElement(element.id, {
-                ...element,
-                extraAttributes: {
-                  ...element.extraAttributes,
-                  data: newData,
-                },
-              });
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setMergeBuilderOpen(null)}>
+                Cancel
+              </Button>
 
-              setMergeBuilderOpen(null);
-            }}
-          >
-            Insert
-          </Button>
-          <Button size="sm" variant="destructive" onClick={() => setMergeBuilderOpen(null)}>Cancel</Button>
+              <Button
+                onClick={() => {
+                  if (!mergeBuilderOpen) return;
+
+                  const { row, col, direction } = mergeBuilderOpen;
+                  const tag = `[merge:${direction}:${mergeCount}]`;
+
+                  const newData = data.map((r) => [...r]);
+                  newData[row][col] = tag + (newData[row][col] || "");
+
+                  setData(newData);
+
+                  updateElement(element.id, {
+                    ...element,
+                    extraAttributes: {
+                      ...element.extraAttributes,
+                      data: newData,
+                    },
+                  });
+
+                  setMergeBuilderOpen(null);
+                }}
+              >
+                Insert
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </Form>
