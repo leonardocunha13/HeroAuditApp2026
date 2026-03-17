@@ -88,6 +88,7 @@ interface TextFieldExtraAttributes {
   headerRowIndexes?: number[];
   fontSize?: number;
   nextPageOrientation?: "portrait" | "landscape" | "default";
+  nextPageSize?: "A3" | "A4" | "default"
 }
 
 export type FormElementInstance = {

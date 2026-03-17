@@ -17,6 +17,7 @@ export const PageBreakFieldFormElement: FormElement = {
     height: 60,
     extraAttributes: {
       nextPageOrientation: "default",
+      nextPageSize: "default",
     },
   }),
   designerBtnElement: {

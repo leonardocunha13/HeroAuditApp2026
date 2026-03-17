@@ -11,6 +11,9 @@ import {
 import useDesigner from "../hooks/useDesigner";
 import { FormElementInstance } from "../FormElements";
 
+type PageOrientation = "portrait" | "landscape" | "default";
+type PageSize = "A4" | "A3" | "default";
+
 export function PropertiesComponent({
   elementInstance,
 }: {
@@ -19,17 +22,32 @@ export function PropertiesComponent({
   const { elements, updateElement } = useDesigner();
 
   const liveElement =
-    elements.find((el: FormElementInstance) => el.id === elementInstance.id) ?? elementInstance;
+    elements.find((el: FormElementInstance) => el.id === elementInstance.id) ??
+    elementInstance;
 
   const nextPageOrientation =
-    liveElement.extraAttributes?.nextPageOrientation ?? "default";
+    (liveElement.extraAttributes?.nextPageOrientation as PageOrientation) ??
+    "default";
 
-  function updateOrientation(value: "portrait" | "landscape" | "default") {
+  const nextPageSize =
+    (liveElement.extraAttributes?.nextPageSize as PageSize) ?? "default";
+
+  function updateOrientation(value: PageOrientation) {
     updateElement(liveElement.id, {
       ...liveElement,
       extraAttributes: {
         ...(liveElement.extraAttributes ?? {}),
         nextPageOrientation: value,
+      },
+    });
+  }
+
+  function updatePageSize(value: PageSize) {
+    updateElement(liveElement.id, {
+      ...liveElement,
+      extraAttributes: {
+        ...(liveElement.extraAttributes ?? {}),
+        nextPageSize: value,
       },
     });
   }
@@ -50,8 +68,22 @@ export function PropertiesComponent({
         </Select>
       </div>
 
+      <div className="space-y-2">
+        <Label>Next page size</Label>
+        <Select value={nextPageSize} onValueChange={updatePageSize}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select page size" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">Use document default</SelectItem>
+            <SelectItem value="A4">A4</SelectItem>
+            <SelectItem value="A3">A3</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <p className="text-sm text-muted-foreground">
-        This page break starts a new PDF page. The content below it will use the selected orientation.
+        This page break starts a new PDF page. The content below it will use the selected orientation and page size.
       </p>
     </div>
   );

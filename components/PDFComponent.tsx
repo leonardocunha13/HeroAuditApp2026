@@ -1,13 +1,15 @@
-// components/PDFDocument.tsx
+// components/PDFComponent.tsx
 import { Document, Page, Text, View, StyleSheet, Image, Font } from "@react-pdf/renderer";
 import { FormElementInstance } from "./FormElements";
 import { renderHtmlToPDFElements } from "./converthtmlreact";
 const STAMP_SRC = "/Stamp.png";
 
 Font.register({
-  family: 'DejaVuSans',
-  src: '/fonts/DejaVuSans.ttf',
+  family: "DejaVuSans",
+  src: "/fonts/DejaVuSans.ttf",
 });
+
+Font.registerHyphenationCallback((word) => [word]);
 
 interface Props {
   elements: FormElementInstance[];
@@ -147,7 +149,15 @@ const stylesStamp = StyleSheet.create({
 });
 
 
-function renderFieldValue(element: FormElementInstance, value: unknown, allValues: Record<string, unknown>) {
+function renderFieldValue(
+  element: FormElementInstance,
+  value: unknown,
+  allValues: Record<string, unknown>,
+  pageContext?: {
+    pageSize: "A3" | "A4";
+    orientation: "portrait" | "landscape";
+  }
+) {
 
   switch (element.type) {
     case "ImageField": {
@@ -357,14 +367,25 @@ function renderFieldValue(element: FormElementInstance, value: unknown, allValue
       );
       const rows = tableData.length;
       const columns = Math.max(...tableData.map((row: string[]) => row.length), 0);
-      const isCompactMode = columns > 10;
       const columnHeaders = element.extraAttributes?.columnHeaders || [];
+
+      const pageWidth =
+        pageContext?.pageSize === "A3"
+          ? pageContext?.orientation === "landscape"
+            ? 1190.55
+            : 841.89
+          : pageContext?.orientation === "landscape"
+            ? 841.89
+            : 595.28;
+
+      const usablePageWidth = pageWidth - 90;
 
       const parseCell = (cellValue: string): string => {
         const trimmed = cellValue?.trim() || "";
         const withoutMerge = trimmed
           .replace(/^\[merge:(right|down):\d+\]/, "")
           .trim();
+
         if (trimmed === "[camera]") return "No picture was taken";
         if (withoutMerge.startsWith("[checkbox")) {
           if (withoutMerge === "[checkbox:true]") return "✔";
@@ -405,6 +426,7 @@ function renderFieldValue(element: FormElementInstance, value: unknown, allValue
 
         return withoutMerge || "";
       };
+
       const isMergedDown = (value: string) => /^\[merge:down:(\d+)\]/.test(value.trim());
       const getMergeDownSpan = (value: string) => {
         const match = value.trim().match(/^\[merge:down:(\d+)\]/);
@@ -415,43 +437,73 @@ function renderFieldValue(element: FormElementInstance, value: unknown, allValue
         const match = value.trim().match(/^\[merge:right:(\d+)\]/);
         return match ? parseInt(match[1], 10) : 0;
       };
-      // Get the column widths based on the content
+
       const estimateColumnWidths = (
         tableData: string[][],
         columnCount: number,
-        columnHeaders: string[] = []
+        columnHeaders: string[] = [],
+        headerFontSize = 9,
+        bodyFontSize = 8
       ): number[] => {
-        const maxCharPerColumn = Array(columnCount).fill(0);
+        const widths = Array(columnCount).fill(0);
         const isDateColumn = Array(columnCount).fill(false);
-        const allRows = [columnHeaders.slice(0, columnCount), ...tableData];
 
-        allRows.forEach((row) => {
+        const getHeaderWeight = (text: string) => {
+          // technical headers with underscores usually need more room
+          if (text.includes("_")) return 1.22;
+          if (text.includes("-")) return 1.22;
+          if (text.length <= 4) return 1.05;
+          return 1.1;
+        };
+
+        for (let colIndex = 0; colIndex < columnCount; colIndex++) {
+          const rawHeader = columnHeaders[colIndex] || "";
+          const headerText = parseCell(rawHeader).trim();
+
+          const cleanHeader = headerText || `Col ${colIndex + 1}`;
+
+          // header width estimate
+          const headerCharWidth =
+            cleanHeader === cleanHeader.toUpperCase() ? headerFontSize * 0.72 : headerFontSize * 0.64;
+
+          const headerPadding = 16;
+          const headerWeight = getHeaderWeight(cleanHeader);
+
+          const headerEstimatedWidth =
+            Math.max(cleanHeader.length, 4) * headerCharWidth * headerWeight + headerPadding;
+
+          widths[colIndex] = Math.max(widths[colIndex], headerEstimatedWidth);
+        }
+
+        tableData.forEach((row) => {
           row.forEach((cell, colIndex) => {
-            const parsed = parseCell(cell);
-            const lengthWithMin = parsed.length + 13;
-            let px = 13;
+            const parsed = parseCell(cell).trim();
 
-            if (cell.trim().startsWith("[date:")) {
+            if (String(cell).trim().startsWith("[date:")) {
               isDateColumn[colIndex] = true;
-              px = 19;
-            } else if (/^[A-Z0-9\s\W]+$/.test(parsed)) {
-              px = 15;
-            } else if (!isNaN(Number(parsed))) {
-              px = 14;
             }
 
-            maxCharPerColumn[colIndex] = Math.max(
-              maxCharPerColumn[colIndex],
-              lengthWithMin * px
-            );
+            const safeLen = Math.min(Math.max(parsed.length + 14, 1), 24);
+
+            let charWidth = bodyFontSize * 0.62;
+
+            if (String(cell).trim().startsWith("[date:")) {
+              charWidth = bodyFontSize * 0.95;
+            } else if (!isNaN(Number(parsed))) {
+              charWidth = bodyFontSize * 0.78;
+            }
+
+            const bodyEstimatedWidth = safeLen * charWidth + 10;
+
+            widths[colIndex] = Math.max(widths[colIndex], bodyEstimatedWidth);
           });
         });
 
-        const baseMinWidth = 70;
-        const dateMinWidth = 130;
-        const maxWidth = 1200;
+        const baseMinWidth = 58;
+        const dateMinWidth = 85;
+        const maxWidth = 320;
 
-        return maxCharPerColumn.map((w, colIndex) =>
+        return widths.map((w, colIndex) =>
           Math.min(
             Math.max(w, isDateColumn[colIndex] ? dateMinWidth : baseMinWidth),
             maxWidth
@@ -460,24 +512,73 @@ function renderFieldValue(element: FormElementInstance, value: unknown, allValue
       };
 
 
-      const columnWidths = estimateColumnWidths(evaluatedTableData, columns, columnHeaders);
-      const compactStyles = {
-        table: {
-          borderColor: "#000",
-          width: "100%",
-        },
-        tableCell: {
-          borderWidth: 1,
-          borderColor: "#000",
-          padding: 1,
-          flexShrink: 0,
-        },
-        tableRow: {
-          flexDirection: "row",
-        },
-      };
+      const isA3 = pageContext?.pageSize === "A3";
+      const isLandscape = pageContext?.orientation === "landscape";
+
+      // base sizes by page setup
+      let headerFontSize = isA3 ? 9 : 8;
+      let bodyFontSize = isA3 ? 8 : 7;
+      let cellPadding = isA3 ? 3 : 2.5;
+      let minRowHeight = isA3 ? 18 : 16;
+
+      // adjust by orientation
+      if (isLandscape) {
+        headerFontSize += 1;
+        bodyFontSize += 1;
+        cellPadding += 0.5;
+      }
+
+      const reductionStep = isA3 && isLandscape ? 0.6 : 1;
+      const paddingReduction = isA3 && isLandscape ? 0.3 : 0.5;
+      const rowReduction = isA3 && isLandscape ? 1 : 2;
+
+      if (columns >= 9) {
+        headerFontSize -= reductionStep;
+        bodyFontSize -= reductionStep;
+        cellPadding -= paddingReduction;
+      }
+
+      if (columns >= 12) {
+        headerFontSize -= reductionStep;
+        bodyFontSize -= reductionStep;
+        cellPadding -= paddingReduction;
+      }
+
+      if (columns >= 15) {
+        headerFontSize -= reductionStep;
+        bodyFontSize -= reductionStep;
+        minRowHeight -= rowReduction;
+      }
+
+      if (columns >= 18) {
+        headerFontSize -= reductionStep;
+        bodyFontSize -= reductionStep;
+        minRowHeight -= rowReduction;
+      }
+
+      // safe minimums / safe maximums
+      headerFontSize = Math.min(Math.max(headerFontSize, 5), 11);
+      bodyFontSize = Math.min(Math.max(bodyFontSize, 4.5), 10);
+      cellPadding = Math.min(Math.max(cellPadding, 1), 4);
+      minRowHeight = Math.max(minRowHeight, 10);
+
+      const estimatedWidths = estimateColumnWidths(
+        evaluatedTableData,
+        columns,
+        columnHeaders,
+        headerFontSize,
+        bodyFontSize
+      );
+      const totalEstimatedWidth = estimatedWidths.reduce((sum, w) => sum + w, 0);
+
+      // If the table is smaller than the available width, stretch it to full page width
+      const columnWidths =
+        totalEstimatedWidth < usablePageWidth
+          ? estimatedWidths.map((w) => (w / totalEstimatedWidth) * usablePageWidth)
+          : estimatedWidths;
+
       return (
-        <View style={isCompactMode ? compactStyles.table : styles.table}>
+        <View style={styles.table}>
           {/* Header */}
           <View style={styles.tableRow} wrap={false}>
             {(() => {
@@ -544,7 +645,7 @@ function renderFieldValue(element: FormElementInstance, value: unknown, allValue
                       borderBottom: "1pt solid black",
                       borderLeft: leftBorder,
                       borderRight: rightBorder,
-                      padding: isCompactMode ? 1 : 3,
+                      padding: cellPadding,
                       justifyContent: "center",
                       flexShrink: 0,
                     }}
@@ -552,10 +653,11 @@ function renderFieldValue(element: FormElementInstance, value: unknown, allValue
                   >
                     <Text
                       style={{
-                        fontSize: isCompactMode ? 5 : 10,
+                        fontSize: headerFontSize,
                         textAlign: "center",
                         fontWeight: 600,
                         fontFamily: "DejaVuSans",
+                        lineHeight: 1.15,
                       }}
                     >
                       {text}
@@ -695,8 +797,9 @@ function renderFieldValue(element: FormElementInstance, value: unknown, allValue
                       <View
                         key={`cell-${rowIndex}-${colIndex}`}
                         style={[
-                          isCompactMode ? compactStyles.tableCell : styles.tableCell,
+                          styles.tableCell,
                           {
+                            padding: cellPadding,
                             width,
                             borderLeft: "1pt solid black",
                             borderRight: rightBorder,
@@ -725,9 +828,9 @@ function renderFieldValue(element: FormElementInstance, value: unknown, allValue
                               <Text
                                 style={{
                                   fontFamily: "DejaVuSans",
-                                  minHeight: isCompactMode ? 20 : "auto",
-                                  fontSize: isCompactMode ? 4 : 9,
-                                  textAlign: isCenteredCell || isHeaderRow ? "center" : "justify",
+                                  minHeight: minRowHeight,
+                                  fontSize: bodyFontSize,
+                                  textAlign: isCenteredCell || isHeaderRow ? "center" : "left",
                                   fontWeight: isHeaderRow ? 600 : isSpecial ? 600 : undefined,
                                   color:
                                     cellText === "PASS"
@@ -962,10 +1065,12 @@ function renderFieldValue(element: FormElementInstance, value: unknown, allValue
   }
 }
 type PDFOrientation = "portrait" | "landscape";
+type PDFPageSize = "A3" | "A4";
 
 type PDFSection = {
   elements: FormElementInstance[];
   orientation: PDFOrientation;
+  pageSize: PDFPageSize;
 };
 
 function getPageDimensions(
@@ -986,11 +1091,13 @@ function getPageDimensions(
 
 function splitElementsByPageBreak(
   elements: FormElementInstance[],
-  defaultOrientation: PDFOrientation
+  defaultOrientation: PDFOrientation,
+  defaultPageSize: PDFPageSize
 ): PDFSection[] {
   const sections: PDFSection[] = [];
 
   let currentOrientation: PDFOrientation = defaultOrientation;
+  let currentPageSize: PDFPageSize = defaultPageSize;
   let currentElements: FormElementInstance[] = [];
 
   for (const el of elements) {
@@ -999,6 +1106,7 @@ function splitElementsByPageBreak(
         sections.push({
           elements: currentElements,
           orientation: currentOrientation,
+          pageSize: currentPageSize,
         });
       }
 
@@ -1008,7 +1116,14 @@ function splitElementsByPageBreak(
           ? (el.extraAttributes.nextPageOrientation as PDFOrientation)
           : defaultOrientation;
 
+      const nextPageSize =
+        el.extraAttributes?.nextPageSize &&
+          el.extraAttributes.nextPageSize !== "default"
+          ? (el.extraAttributes.nextPageSize as PDFPageSize)
+          : defaultPageSize;
+
       currentOrientation = nextOrientation;
+      currentPageSize = nextPageSize;
       currentElements = [];
       continue;
     }
@@ -1020,6 +1135,7 @@ function splitElementsByPageBreak(
     sections.push({
       elements: currentElements,
       orientation: currentOrientation,
+      pageSize: currentPageSize,
     });
   }
 
@@ -1075,9 +1191,13 @@ export default function PDFDocument({ elements, responses, formName, revision, o
   const defaultOrientation: PDFOrientation =
     orientation === "landscape" ? "landscape" : "portrait";
 
-  const fixedPageSize = pageSize || "A3";
+  const fixedPageSize: PDFPageSize = pageSize || "A3";
 
-  const pdfSections = splitElementsByPageBreak(elements, defaultOrientation);
+  const pdfSections = splitElementsByPageBreak(
+    elements,
+    defaultOrientation,
+    fixedPageSize
+  );
 
   console.log("RAW ELEMENT TYPES", elements.map((e) => e.type));
   console.log(
@@ -1099,7 +1219,7 @@ export default function PDFDocument({ elements, responses, formName, revision, o
         );
 
         const pageDimensions = getPageDimensions(
-          fixedPageSize,
+          section.pageSize,
           section.orientation
         );
 
@@ -1129,7 +1249,10 @@ export default function PDFDocument({ elements, responses, formName, revision, o
                         {el.type === "ImageField" ? (
                           <Image src={el.extraAttributes?.imageUrl} style={imageStyle} />
                         ) : (
-                          renderFieldValue(el, value, responses)
+                          renderFieldValue(el, value, responses, {
+                            pageSize: section.pageSize,
+                            orientation: section.orientation,
+                          })
                         )}
                       </View>
                     );
@@ -1178,7 +1301,10 @@ export default function PDFDocument({ elements, responses, formName, revision, o
                           </Text>
                         )}
 
-                      {renderFieldValue(element, value, responses)}
+                      {renderFieldValue(element, value, responses, {
+                        pageSize: section.pageSize,
+                        orientation: section.orientation,
+                      })}
                     </View>
                   );
                 })}

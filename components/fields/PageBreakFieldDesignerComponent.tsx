@@ -16,10 +16,13 @@ export function DesignerComponent({
   const orientation =
     elementInstance?.extraAttributes?.nextPageOrientation ?? "default";
 
+  const pageSize =
+    elementInstance?.extraAttributes?.nextPageSize ?? "default";
+
   return (
     <div className="flex flex-col gap-2 w-full">
       <Label className="text-muted-foreground">
-        Page Break → next page: {orientation}
+        Page Break → next page: {orientation} / {pageSize}
       </Label>
       <div className={pageBreakClass} />
     </div>
