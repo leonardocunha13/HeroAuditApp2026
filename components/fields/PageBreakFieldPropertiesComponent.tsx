@@ -9,21 +9,22 @@ import {
   SelectValue,
 } from "../ui/select";
 import useDesigner from "../hooks/useDesigner";
+import { FormElementInstance } from "../FormElements";
 
 export function PropertiesComponent({
   elementInstance,
 }: {
-  elementInstance: any;
+  elementInstance: FormElementInstance;
 }) {
   const { elements, updateElement } = useDesigner();
 
   const liveElement =
-    elements.find((el: any) => el.id === elementInstance.id) ?? elementInstance;
+    elements.find((el: FormElementInstance) => el.id === elementInstance.id) ?? elementInstance;
 
   const nextPageOrientation =
     liveElement.extraAttributes?.nextPageOrientation ?? "default";
 
-  function updateOrientation(value: string) {
+  function updateOrientation(value: "portrait" | "landscape" | "default") {
     updateElement(liveElement.id, {
       ...liveElement,
       extraAttributes: {

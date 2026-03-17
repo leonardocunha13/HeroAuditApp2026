@@ -2,6 +2,7 @@
 
 import { Label } from "../ui/label";
 import clsx from "clsx";
+import { FormElementInstance } from "../FormElements";
 
 const pageBreakClass = clsx(
   "w-full border-t border-dashed border-gray-400 my-6"
@@ -10,7 +11,7 @@ const pageBreakClass = clsx(
 export function DesignerComponent({
   elementInstance,
 }: {
-  elementInstance: any;
+  elementInstance: FormElementInstance;
 }) {
   const orientation =
     elementInstance?.extraAttributes?.nextPageOrientation ?? "default";
