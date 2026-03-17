@@ -22,17 +22,23 @@ export function DesignerComponent({ elementInstance }: { elementInstance: FormEl
 
   const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (containerRef.current) {
-      const newHeight = containerRef.current.offsetHeight;
-      if (element.height !== newHeight) {
+    if (!containerRef.current) return;
+
+    const observer = new ResizeObserver(() => {
+      const newHeight = containerRef.current?.offsetHeight ?? 0;
+
+      if (newHeight !== element.height) {
         updateElement(element.id, {
           ...element,
           height: newHeight,
-
         });
       }
-    }
-  }, [rows, columns, data, element, updateElement]);
+    });
+
+    observer.observe(containerRef.current);
+
+    return () => observer.disconnect();
+  }, [element.id, element.height, updateElement, element]);
 
   const toggleHeaderRow = (rowIndex: number) => {
     const isHeader = headerRowIndexes.includes(rowIndex);

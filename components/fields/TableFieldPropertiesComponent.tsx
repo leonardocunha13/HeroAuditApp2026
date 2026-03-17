@@ -70,22 +70,26 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
     }
   }, [activeCell, mergeBuilderOpen]);
   useEffect(() => {
-    form.reset(element.extraAttributes);
-    setData(element.extraAttributes.data);
+    form.reset({
+      label: element.extraAttributes.label,
+      rows: element.extraAttributes.rows,
+      columns: element.extraAttributes.columns,
+      data: element.extraAttributes.data,
+      columnHeaders: element.extraAttributes.columnHeaders,
+      headerRowIndexes: element.extraAttributes.headerRowIndexes,
+    });
 
-    const existingHeaders = element.extraAttributes.columnHeaders;
-    const numCols = element.extraAttributes.columns;
+    setData(element.extraAttributes.data || []);
 
-    if (existingHeaders && existingHeaders.length === numCols) {
-      setColumnHeaders(existingHeaders);
-    } else {
-      const newHeaders = [];
-      for (let i = 0; i < numCols; i++) {
-        newHeaders.push(existingHeaders?.[i] || `Col ${i + 1}`);
-      }
-      setColumnHeaders(newHeaders);
-    }
-  }, [element.extraAttributes, form]);
+    const existingHeaders = element.extraAttributes.columnHeaders || [];
+    const numCols = element.extraAttributes.columns || 2;
+
+    setColumnHeaders(
+      Array.from({ length: numCols }, (_, i) => existingHeaders[i] || `Col ${i + 1}`)
+    );
+
+    setHeaderRowIndexes(element.extraAttributes.headerRowIndexes || []);
+  }, [element.id, form]);
 
   const watchRows = form.watch("rows");
   const watchColumns = form.watch("columns");
@@ -100,14 +104,20 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
   }, [watchRows, watchColumns]);
 
   function handleCellChange(row: number, col: number, value: string) {
-    const newData = [...data];
+    const newData = data.map((r) => [...r]);
     newData[row][col] = value;
+
     setData(newData);
+
     updateElement(element.id, {
       ...element,
       extraAttributes: {
         ...element.extraAttributes,
+        rows: watchRows,
+        columns: watchColumns,
         data: newData,
+        columnHeaders,
+        headerRowIndexes,
       },
     });
   }
@@ -124,20 +134,75 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
   }, [watchColumns]);
 
   function handleHeaderChange(index: number, value: string) {
-    const updatedHeaders = [...columnHeaders];
-    updatedHeaders[index] = value;
+    const updatedHeaders = columnHeaders.map((header, i) =>
+      i === index ? value : header
+    );
+
     setColumnHeaders(updatedHeaders);
 
     updateElement(element.id, {
       ...element,
       extraAttributes: {
         ...element.extraAttributes,
+        rows: watchRows,
+        columns: watchColumns,
         data,
         columnHeaders: updatedHeaders,
+        headerRowIndexes,
+      },
+    });
+  }
+  function handleRowsChange(newRows: number) {
+    const safeRows = Math.max(1, newRows);
+
+    const newData = Array.from({ length: safeRows }, (_, row) =>
+      Array.from({ length: watchColumns }, (_, col) => data?.[row]?.[col] || "")
+    );
+
+    setData(newData);
+    form.setValue("rows", safeRows);
+
+    updateElement(element.id, {
+      ...element,
+      extraAttributes: {
+        ...element.extraAttributes,
+        rows: safeRows,
+        columns: watchColumns,
+        data: newData,
+        columnHeaders,
+        headerRowIndexes,
       },
     });
   }
 
+  function handleColumnsChange(newColumns: number) {
+    const safeColumns = Math.max(1, newColumns);
+
+    const newData = Array.from({ length: watchRows }, (_, row) =>
+      Array.from({ length: safeColumns }, (_, col) => data?.[row]?.[col] || "")
+    );
+
+    const newHeaders = Array.from(
+      { length: safeColumns },
+      (_, i) => columnHeaders[i] || `Col ${i + 1}`
+    );
+
+    setData(newData);
+    setColumnHeaders(newHeaders);
+    form.setValue("columns", safeColumns);
+
+    updateElement(element.id, {
+      ...element,
+      extraAttributes: {
+        ...element.extraAttributes,
+        rows: watchRows,
+        columns: safeColumns,
+        data: newData,
+        columnHeaders: newHeaders,
+        headerRowIndexes,
+      },
+    });
+  }
   function applyChanges(values: propertiesFormSchemaType) {
     const { label } = values;
     updateElement(element.id, {
@@ -253,7 +318,9 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
   type NumberInputFieldProps = {
     field: ControllerRenderProps<TableFieldFormData, "rows" | "columns">;
     label: string;
+    onCommit: (value: number) => void;
   };
+
   function toggleHeaderRow(rowIndex: number) {
     const isHeader = headerRowIndexes.includes(rowIndex);
     const newHeaderRows = isHeader
@@ -271,7 +338,7 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
     });
   }
 
-  function NumberInputField({ field, label }: NumberInputFieldProps) {
+  function NumberInputField({ field, label, onCommit }: NumberInputFieldProps) {
     const [localValue, setLocalValue] = React.useState(field.value);
 
     React.useEffect(() => {
@@ -287,7 +354,10 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
             value={localValue}
             onChange={(e) => setLocalValue(Number(e.target.value))}
             onBlur={() => {
-              if (!isNaN(localValue)) field.onChange(localValue);
+              if (!isNaN(localValue)) {
+                field.onChange(localValue);
+                onCommit(localValue);
+              }
             }}
           />
         </FormControl>
@@ -354,12 +424,24 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
         <FormField
           control={form.control}
           name="rows"
-          render={({ field }) => <NumberInputField field={field} label="Rows" />}
+          render={({ field }) => (
+            <NumberInputField
+              field={field}
+              label="Rows"
+              onCommit={handleRowsChange}
+            />
+          )}
         />
         <FormField
           control={form.control}
           name="columns"
-          render={({ field }) => <NumberInputField field={field} label="Columns" />}
+          render={({ field }) => (
+            <NumberInputField
+              field={field}
+              label="Columns"
+              onCommit={handleColumnsChange}
+            />
+          )}
         />
         <Divider orientation="horizontal" size="small" color="gray" marginTop="1rem" marginBottom="1rem" />
         <div className="flex justify-between items-center">

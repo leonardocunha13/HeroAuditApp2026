@@ -59,29 +59,55 @@ export function PropertiesComponent({
 
   // Reset form when element changes
   useEffect(() => {
-    form.reset(element.extraAttributes as propertiesFormSchemaType);
-  }, [element, form]);
+    form.reset({
+      imageUrl: element.extraAttributes.imageUrl ?? "",
+      position: ["left", "center", "right"].includes(element.extraAttributes.position)
+        ? (element.extraAttributes.position as "left" | "center" | "right")
+        : "center",
+      repeatOnPageBreak: !!element.extraAttributes.repeatOnPageBreak,
+      preserveOriginalSize: !!element.extraAttributes.preserveOriginalSize,
+      label: element.extraAttributes.label ?? "",
+      width: element.extraAttributes.width ?? 200,
+      height: element.extraAttributes.height ?? 0,
+    });
+
+    setNaturalSize(null);
+  }, [element.id, form]);
 
   // Load image from S3 or URL, update natural size and element attributes
   useEffect(() => {
     const imageUrl = element.extraAttributes?.imageUrl;
     if (!imageUrl || imageUrl.startsWith("http")) return;
 
+    let cancelled = false;
+    const currentElementId = element.id;
+
     async function loadImage() {
       try {
         const { url } = await getUrl({ path: imageUrl });
+        if (cancelled) return;
+
         const img = new Image();
         img.crossOrigin = "anonymous";
+
         img.onload = () => {
-          setNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
+          if (cancelled) return;
+
+          const natural = {
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+          };
+
+          setNaturalSize(natural);
 
           const preserveOriginalSize = form.getValues("preserveOriginalSize");
-          const width = preserveOriginalSize ? img.naturalWidth : form.getValues("width") || 200;
-          const height = preserveOriginalSize
-            ? img.naturalHeight
-            : (img.naturalHeight / img.naturalWidth) * width;
+          const currentWidth = form.getValues("width") || 200;
+          const finalWidth = preserveOriginalSize ? natural.width : currentWidth;
+          const finalHeight = preserveOriginalSize
+            ? natural.height
+            : (natural.height / natural.width) * finalWidth;
 
-          updateElement(element.id, {
+          updateElement(currentElementId, {
             ...element,
             extraAttributes: {
               ...element.extraAttributes,
@@ -89,45 +115,56 @@ export function PropertiesComponent({
               position: form.getValues("position"),
               repeatOnPageBreak: form.getValues("repeatOnPageBreak"),
               label: form.getValues("label"),
-              width,
-              height,
+              width: finalWidth,
+              height: finalHeight,
             },
           });
 
-          form.setValue("width", width, { shouldDirty: false });
+          form.setValue("width", finalWidth, { shouldDirty: false });
+          form.setValue("height", finalHeight, { shouldDirty: false });
         };
+
         img.src = url.toString();
       } catch (err) {
         console.error("Failed to load image from S3", err);
       }
     }
+
     loadImage();
-  }, [element.extraAttributes?.imageUrl, element, form, updateElement]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [element.id, element.extraAttributes?.imageUrl, form, updateElement]);
 
   // Apply changes to element and form
-  const applyChanges = useCallback((values: propertiesFormSchemaType) => {
-    if (!naturalSize) return;
+  const applyChanges = useCallback(
+    (values: propertiesFormSchemaType) => {
+      if (!naturalSize) return;
 
-    const { imageUrl, position, repeatOnPageBreak, preserveOriginalSize, label, width } = values;
+      const { imageUrl, position, repeatOnPageBreak, preserveOriginalSize, label, width } = values;
 
-    const ratio = naturalSize.height / naturalSize.width;
-    const height = preserveOriginalSize ? naturalSize.height : width * ratio;
+      const ratio = naturalSize.height / naturalSize.width;
+      const height = preserveOriginalSize ? naturalSize.height : width * ratio;
 
-    updateElement(element.id, {
-      ...element,
-      extraAttributes: {
-        imageUrl,
-        position,
-        repeatOnPageBreak,
-        preserveOriginalSize,
-        label,
-        width,
-        height,
-      },
-    });
+      updateElement(element.id, {
+        ...element,
+        extraAttributes: {
+          ...element.extraAttributes,
+          imageUrl,
+          position,
+          repeatOnPageBreak,
+          preserveOriginalSize,
+          label,
+          width,
+          height,
+        },
+      });
 
-    form.setValue("height", height, { shouldDirty: false });
-  }, [naturalSize, element, updateElement, form]);
+      form.setValue("height", height, { shouldDirty: false });
+    },
+    [naturalSize, element.id, element, updateElement, form]
+  );
 
   // Handle file input changes for uploading new image
   const handleFileChange = useCallback(
@@ -244,7 +281,8 @@ export function PropertiesComponent({
             type="text"
             placeholder="https://example.com/image.jpg"
             className="w-full border rounded px-3 py-1"
-            defaultValue={form.getValues("imageUrl")}
+            value={form.watch("imageUrl")}
+            onChange={(e) => form.setValue("imageUrl", e.target.value, { shouldDirty: true })}
             onBlur={(e) => {
               const urlInput = e.target.value;
               if (!urlInput) return;

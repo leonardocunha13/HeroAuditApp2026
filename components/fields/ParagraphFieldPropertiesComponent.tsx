@@ -3,7 +3,7 @@
 import {
     FormElementInstance,
 } from "../FormElements";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import StarterKit from "@tiptap/starter-kit";
 import TextAlign from "@tiptap/extension-text-align";
 import TextStyle from "@tiptap/extension-text-style";
@@ -19,6 +19,9 @@ import OrderedList from '@tiptap/extension-ordered-list';
 
 export function PropertiesComponent({ elementInstance }: { elementInstance: FormElementInstance }) {
     const element = elementInstance as CustomInstance;
+    const [, setRefresh] = useState(0);
+
+
     const editor = useEditor({
         extensions: [
             StarterKit.configure({
@@ -31,7 +34,10 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
             ListItem,
             TextStyle,
             Color,
-            TextAlign.configure({ types: ["paragraph"] }),
+            TextAlign.configure({
+                types: ["paragraph"],
+                alignments: ["left", "center", "right", "justify"], // 👈 add this
+            }),
             Underline,
         ],
         content: element.extraAttributes.text,
@@ -40,6 +46,20 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
             element.extraAttributes.text = html;
         },
     });
+
+    useEffect(() => {
+        if (!editor) return;
+
+        const update = () => setRefresh((v) => v + 1);
+
+        editor.on("selectionUpdate", update);
+        editor.on("transaction", update);
+
+        return () => {
+            editor.off("selectionUpdate", update);
+            editor.off("transaction", update);
+        };
+    }, [editor]);
 
     useEffect(() => {
         if (editor && element.extraAttributes.text !== editor.getHTML()) {
@@ -84,23 +104,42 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
                     <Button
                         variant="outline"
                         onClick={() => editor.chain().focus().setTextAlign("left").run()}
-                        className={`px-4 py-2 ${editor.isActive("textAlign") && editor.getAttributes("textAlign").textAlign === "left" ? "bg-blue-500 text-white" : "text-foreground dark:text-muted-foreground"}`}
+                        className={`px-4 py-2 ${editor.isActive({ textAlign: "left" })
+                            ? "bg-blue-500 text-white"
+                            : "text-foreground dark:text-muted-foreground"
+                            }`}
                     >
                         Left
                     </Button>
                     <Button
                         variant="outline"
                         onClick={() => editor.chain().focus().setTextAlign("center").run()}
-                        className={`px-4 py-2 ${editor.isActive("textAlign") && editor.getAttributes("textAlign").textAlign === "center" ? "bg-blue-500 text-white" : "text-foreground dark:text-muted-foreground"}`}
+                        className={`px-4 py-2 ${editor.isActive({ textAlign: "center" })
+                            ? "bg-blue-500 text-white"
+                            : "text-foreground dark:text-muted-foreground"
+                            }`}
                     >
                         Center
                     </Button>
                     <Button
                         variant="outline"
                         onClick={() => editor.chain().focus().setTextAlign("right").run()}
-                        className={`px-4 py-2 ${editor.isActive("textAlign") && editor.getAttributes("textAlign").textAlign === "right" ? "bg-blue-500 text-white" : "text-foreground dark:text-muted-foreground"}`}
+                        className={`px-4 py-2 ${editor.isActive({ textAlign: "right" })
+                            ? "bg-blue-500 text-white"
+                            : "text-foreground dark:text-muted-foreground"
+                            }`}
                     >
                         Right
+                    </Button>
+                    <Button
+                        variant="outline"
+                        onClick={() => editor.chain().focus().setTextAlign("justify").run()}
+                        className={`px-4 py-2 ${editor.isActive({ textAlign: "justify" })
+                            ? "bg-blue-500 text-white"
+                            : "text-foreground dark:text-muted-foreground"
+                            }`}
+                    >
+                        Justify
                     </Button>
                 </div>
             </div>

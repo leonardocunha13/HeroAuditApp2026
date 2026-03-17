@@ -13,10 +13,10 @@ import { PropertiesComponent } from "./ImageFieldPropertiesComponent";
 
 const type: ElementsType = "ImageField";
 
-export const extraAttributes = {
+export const defaultExtraAttributes = {
   label: "",
   imageUrl: "",
-  position: "center",
+  position: "center" as "left" | "center" | "right",
   repeatOnPageBreak: false,
   preserveOriginalSize: false,
   width: 0,
@@ -25,7 +25,7 @@ export const extraAttributes = {
 
 export const propertiesSchema = z.object({
   label: z.string().min(0).max(200),
-  imageUrl: z.string().url("Must be a valid URL").optional(),
+  imageUrl: z.union([z.literal(""), z.string().url("Must be a valid URL")]),
   position: z.enum(["left", "center", "right"]),
   repeatOnPageBreak: z.boolean(),
   preserveOriginalSize: z.boolean(),
@@ -38,7 +38,9 @@ export const ImageFieldFormElement: FormElement = {
   construct: (id: string) => ({
     id,
     type,
-    extraAttributes,
+    extraAttributes: {
+      ...defaultExtraAttributes,
+    },
     label: "Image Field",
     height: 0,
   }),
@@ -49,18 +51,9 @@ export const ImageFieldFormElement: FormElement = {
   designerComponent: DesignerComponent,
   formComponent: FormComponent,
   propertiesComponent: PropertiesComponent,
-  validate: (
-    formElement: FormElementInstance,
-    currentValue: string,
-  ): boolean => {
-    const element = formElement as CustomInstance;
-    if (element.extraAttributes.required) {
-      return currentValue === "true";
-    }
-    return true;
-  },
+  validate: () => true,
 };
 
 export type CustomInstance = FormElementInstance & {
-  extraAttributes: typeof extraAttributes;
+  extraAttributes: typeof defaultExtraAttributes;
 };

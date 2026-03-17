@@ -1,50 +1,76 @@
 "use client";
 
-import {
-  FormElementInstance,
-} from "../FormElements";
-import { useEffect, useRef, useState } from "react";
+import { FormElementInstance } from "../FormElements";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CustomInstance } from "./ParagraphField";
 
-
-export function DesignerComponent({ elementInstance }: { elementInstance: FormElementInstance }) {
+export function DesignerComponent({
+  elementInstance,
+}: {
+  elementInstance: FormElementInstance;
+}) {
   const element = elementInstance as CustomInstance;
   const contentRef = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState<number>(0);
-  const [align, setAlign] = useState<'left' | 'center' | 'right'>('left');
-   useEffect(() => {
-    // Detect alignment from first paragraph
+
+  const [height, setHeight] = useState<number>(120);
+  const [align, setAlign] = useState<"justify" | "left" | "center" | "right">("left");
+
+  useEffect(() => {
     const parser = new DOMParser();
-    const doc = parser.parseFromString(element.extraAttributes.text, 'text/html');
-    const p = doc.querySelector('p');
+    const doc = parser.parseFromString(element.extraAttributes.text || "", "text/html");
+    const p = doc.querySelector("p");
+
     if (p?.style.textAlign) {
-      setAlign(p.style.textAlign as 'left' | 'center' | 'right');
+      setAlign(p.style.textAlign as "justify" | "left" | "center" | "right");
+    } else {
+      setAlign("left");
     }
   }, [element.extraAttributes.text]);
 
-  useEffect(() => {
-    if (!contentRef.current) return;
+  useLayoutEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
 
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const contentHeight = Math.round(entry.contentRect.height + 50);
-        if (contentHeight !== elementInstance.height) {
-          elementInstance.height = contentHeight;
-          setHeight(contentHeight);
-        }
+    const updateHeight = () => {
+      const measured = Math.max(el.scrollHeight);
+      setHeight(measured);
+
+      if (elementInstance.height !== measured) {
+        elementInstance.height = measured;
       }
+    };
+
+    updateHeight();
+
+    const observer = new ResizeObserver(() => {
+      updateHeight();
     });
 
-    observer.observe(contentRef.current);
-    return () => observer.disconnect();
-  }, [elementInstance]);
+    observer.observe(el);
 
-return (
-    <div style={{ height: `${height}px` }}>
+    return () => observer.disconnect();
+  }, [element.extraAttributes.text, elementInstance]);
+
+  return (
+    <div
+      style={{
+        minHeight: `${height}px`,
+        width: "100%",
+      }}
+    >
       <div
         ref={contentRef}
-        className={`p-2 border rounded-md w-full text-sm break-words whitespace-pre-wrap min-h-[60px] ${align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : ''}`}
-        dangerouslySetInnerHTML={{ __html: element.extraAttributes.text }}
+        className={`
+          w-full rounded-md border bg-background px-3 py-3 text-sm
+          leading-6 break-words
+          ${align === "center" ? "text-center" : ""}
+          ${align === "right" ? "text-right" : ""}
+          ${align === "justify" ? "text-justify" : ""}
+        `}
+        style={{
+          minHeight: 70,
+        }}
+        dangerouslySetInnerHTML={{ __html: element.extraAttributes.text || "<p></p>" }}
       />
     </div>
   );

@@ -177,10 +177,66 @@ function renderFieldValue(
         alignStyle = { alignSelf: "flex-start" };
       }
 
+      const baseWidth = Number(element.extraAttributes?.width ?? 200);
+      const baseHeight = Number(
+        element.extraAttributes?.height ?? Math.round(baseWidth * 0.6)
+      );
+
+      const pageWidth =
+        pageContext?.pageSize === "A3"
+          ? pageContext?.orientation === "landscape"
+            ? 1190.55
+            : 841.89
+          : pageContext?.orientation === "landscape"
+            ? 841.89
+            : 595.28;
+
+      // same page padding logic as the rest of your PDF
+      const usablePageWidth = pageWidth - 90;
+
+      // element.width is your form field width in %
+      const fieldPercent = Number(element.width ?? 100) / 100;
+      const availableFieldWidth = usablePageWidth * fieldPercent;
+
+      // page factor
+      let pageFactor = 1;
+
+      if (pageContext?.pageSize === "A3") pageFactor += 0.15;
+      if (pageContext?.orientation === "landscape") pageFactor += 0.1;
+
+      // start from designer width and scale by page config
+      let scaledWidth = baseWidth * pageFactor;
+      let scaledHeight = baseHeight * pageFactor;
+
+      // prevent image from overflowing its field
+      const maxAllowedWidth = availableFieldWidth - 10;
+
+      if (scaledWidth > maxAllowedWidth) {
+        const ratio = maxAllowedWidth / scaledWidth;
+        scaledWidth = maxAllowedWidth;
+        scaledHeight = scaledHeight * ratio;
+      }
+
+      // optional cap so huge single images don't dominate the page
+      const absoluteMaxWidth =
+        pageContext?.pageSize === "A3"
+          ? pageContext?.orientation === "landscape"
+            ? 700
+            : 520
+          : pageContext?.orientation === "landscape"
+            ? 500
+            : 420;
+
+      if (scaledWidth > absoluteMaxWidth) {
+        const ratio = absoluteMaxWidth / scaledWidth;
+        scaledWidth = absoluteMaxWidth;
+        scaledHeight = scaledHeight * ratio;
+      }
+
       const imageStyle = {
         objectFit: "contain" as const,
-        width: 440,
-        height: 176,
+        width: scaledWidth,
+        height: scaledHeight,
         ...alignStyle,
       };
 
@@ -959,7 +1015,7 @@ function renderFieldValue(
     case "ParagraphField": {
       const { text } = element.extraAttributes ?? {};
       const html = typeof text === "string" ? text.trim() : "";
-      let textAlign: "left" | "center" | "right" = "left";
+      let textAlign: "justify" | "left" | "center" | "right" = "left";
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, "text/html");
       const p = doc.querySelector("p");
@@ -967,9 +1023,10 @@ function renderFieldValue(
         const align = p.style.textAlign;
         if (align === "center") textAlign = "center";
         else if (align === "right") textAlign = "right";
+        else if (align === "justify") textAlign = "justify";
       }
       return (
-        <View style={{ padding: 2, borderWidth: 1, borderRadius: 4 }}>
+        <View >
           <Text
             style={{
               fontSize: 10,
