@@ -1,4 +1,3 @@
-import React from "react";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { FormElementInstance } from "./FormElements";
 import { Button } from "./ui/button";
@@ -15,27 +14,26 @@ import { X } from "lucide-react";
 import { ImShare } from "react-icons/im";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import SignatureCanvas from "react-signature-canvas";
+const STAMP_SRC = "/Stamp.png";
 
-const PDF_SIZES = {
-  A4: { portrait: { w: 700, h: 842 }, landscape: { w: 700, h: 842 } },
-  A3: { portrait: { w: 602, h: 1191 }, landscape: { w: 1291, h: 602 } },
-};
 interface Props {
   elements: FormElementInstance[];
   responses: { [key: string]: unknown };
   submissionID: string;
 }
-interface PDFImagePreviewProps {
-  firstPageGroup: FormElementInstance[][];
-  responses: { [key: string]: unknown };
-  formName: string;
-  revision: string | number;
+
+function FirstPageStampPreview({
+  elements,
+  responses,
+  orientation,
+  pageSize,
+  stamp,
+  previewScale = 0.7,
+}: {
+  elements: FormElementInstance[];
+  responses: Record<string, unknown>;
   orientation: "portrait" | "landscape";
   pageSize: "A4" | "A3";
-  docNumber: string;
-  docNumberRevision: string | number;
-  equipmentName: string;
-  equipmentTag: string;
   stamp?: {
     issuedDate: string;
     signedDate: string;
@@ -48,106 +46,197 @@ interface PDFImagePreviewProps {
     width?: number;
     height?: number;
   };
-  includeStamp: boolean;
-}
+  previewScale?: number;
+}) {
+  function buildRows(elements: FormElementInstance[]) {
+    const rows: FormElementInstance[][] = [];
+    let currentRow: FormElementInstance[] = [];
+    let currentWidth = 0;
 
-const PDFImagePreview = React.memo(({
-  firstPageGroup,
-  responses,
-  formName,
-  revision,
-  orientation,
-  pageSize,
-  docNumber,
-  docNumberRevision,
-  equipmentName,
-  equipmentTag,
-  stamp,
-  includeStamp,
-}: PDFImagePreviewProps) => {
-  const [pdfURL, setPdfURL] = useState<string | null>(null);
+    elements.forEach((el) => {
+      const width = el.width || 100;
 
-  useEffect(() => {
-    const generatePDF = async () => {
-      const safeStamp = stamp
-        ? {
-          issuedDate: stamp.issuedDate || "",
-          signedDate: stamp.signedDate || "",
-          reviewer: stamp.reviewer || "",
-          reviewerRole: stamp.reviewerRole || "",
-          status: stamp.status || "",
-          signed: stamp.signed || "",
-          x: stamp.x ?? 10,
-          y: stamp.y ?? 10,
-          width: stamp.width ?? 200,
-          height: stamp.height ?? 100,
-        }
-        : undefined;
-
-      try {
-        const resolvedElements = await prepareResolvedElements(firstPageGroup);
-        const blob = await pdf(
-          <PDFDocument
-            elements={resolvedElements}
-            responses={responses}
-            formName={formName}
-            revision={revision}
-            orientation={orientation}
-            pageSize={pageSize}
-            docNumber={docNumber}
-            docNumberRevision={docNumberRevision}
-            equipmentName={equipmentName}
-            equipmentTag={equipmentTag}
-            stamp={includeStamp ? safeStamp : undefined}
-          />
-        ).toBlob();
-
-        const url = URL.createObjectURL(blob);
-        setPdfURL(url);
-      } catch (err) {
-        console.error("PDF generation error:", err);
-        setPdfURL(null);
+      if (currentWidth + width > 100) {
+        rows.push(currentRow);
+        currentRow = [];
+        currentWidth = 0;
       }
-    };
 
-    if (firstPageGroup.length > 0) generatePDF();
-  }, [
-    firstPageGroup,
-    responses,
-    stamp,
-    orientation,
-    pageSize,
-    formName,
-    revision,
-    docNumber,
-    docNumberRevision,
-    equipmentName,
-    equipmentTag,
-    includeStamp,
-  ]);
+      currentRow.push(el);
+      currentWidth += width;
+    });
 
+    if (currentRow.length) rows.push(currentRow);
 
-  if (!pdfURL) return <div>Loading PDF preview...</div>;
+    return rows;
+  }
+
+  const basePage =
+    pageSize === "A4"
+      ? orientation === "portrait"
+        ? { width: 595.28, height: 841.89 }
+        : { width: 841.89, height: 595.28 }
+      : orientation === "portrait"
+        ? { width: 841.89, height: 1190.55 }
+        : { width: 1190.55, height: 841.89 };
+
+  const scaledPage = {
+    width: basePage.width * previewScale,
+    height: basePage.height * previewScale,
+  };
+
+  const rows = buildRows(
+    elements.filter((el) => el.type !== "PageBreakField")
+  );
 
   return (
-    <div style={{ width: "100%", height: "100%", border: "1px solid #ccc" }}>
-      <object
-        data={pdfURL}
-        type="application/pdf"
-        width="100%"
-        height="100%"
-      >
-        <iframe
-          src={pdfURL}
-          width="100%"
-          height="100%"
-          style={{ border: "none" }}
+    <div
+      data-stamp-page
+      data-page-width={basePage.width}
+      data-page-height={basePage.height}
+      data-preview-scale={previewScale}
+      style={{
+        position: "relative",
+        width: scaledPage.width,
+        height: scaledPage.height,
+        background: "white",
+        margin: "0 auto",
+        padding: 24 * previewScale,
+        boxSizing: "border-box",
+        boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
+        overflow: "hidden",
+        transformOrigin: "top center",
+      }}
+    >
+      {rows.map((row, rowIndex) => (
+        <div
+          key={rowIndex}
+          style={{
+            display: "flex",
+            width: "100%",
+            gap: 12 * previewScale,
+            marginBottom: 12 * previewScale,
+          }}
         >
-        </iframe>
-      </object>
+          {row.map((element) => {
+            const FormComponent = FormElements[element.type].formComponent;
+            const rawValue = responses[element.id];
+            const value =
+              rawValue !== undefined && rawValue !== null
+                ? String(rawValue)
+                : undefined;
+
+            return (
+              <div
+                key={element.id}
+                style={{
+                  width: `${element.width || 100}%`,
+                  transform: `scale(${previewScale})`,
+                  transformOrigin: "top left",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${100 / previewScale}%`,
+                  }}
+                >
+                  <FormComponent
+                    elementInstance={element}
+                    defaultValue={value}
+                    isInvalid={false}
+                    submitValue={() => { }}
+                    readOnly={true}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+
+      {stamp && (
+        <div
+          style={{
+            position: "absolute",
+            left: (stamp.x ?? 10) * previewScale,
+            top: (stamp.y ?? 10) * previewScale,
+            width: (stamp.width ?? 200) * previewScale,
+            height: (stamp.height ?? 100) * previewScale,
+            boxSizing: "border-box",
+            overflow: "hidden",
+            pointerEvents: "none",
+          }}
+        >
+          <img
+            src={STAMP_SRC}
+            alt="stamp"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+            }}
+          />
+
+          <div
+            style={{
+              position: "absolute",
+              top: 29.5 * previewScale,
+              left: 83 * previewScale,
+              fontSize: 6 * previewScale,
+              color: "#000",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {stamp.issuedDate}
+          </div>
+
+          <div
+            style={{
+              position: "absolute",
+              top: 35 * previewScale,
+              left: 83 * previewScale,
+              fontSize: 6 * previewScale,
+              color: "#000",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {stamp.reviewer}
+          </div>
+
+          <div
+            style={{
+              position: "absolute",
+              top: 41 * previewScale,
+              left: 83 * previewScale,
+              fontSize: 6 * previewScale,
+              color: "#000",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {stamp.reviewerRole}
+          </div>
+
+          {stamp.signed && (
+            <img
+              src={stamp.signed}
+              alt="signature"
+              style={{
+                position: "absolute",
+                top: 45 * previewScale,
+                left: 40 * previewScale,
+                width: 110 * previewScale,
+                height: 13 * previewScale,
+                objectFit: "contain",
+              }}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
-});
+}
 
 function resolveTablesForPDF(responses: Record<string, unknown>) {
   const resolved: Record<string, unknown> = { ...responses };
@@ -303,6 +392,16 @@ function resolveTablesForPDF(responses: Record<string, unknown>) {
   return resolved;
 }
 
+function getFirstPageElements(elements: FormElementInstance[]): FormElementInstance[] {
+  const firstPage: FormElementInstance[] = [];
+
+  for (const el of elements) {
+    if (el.type === "PageBreakField") break;
+    firstPage.push(el);
+  }
+
+  return firstPage;
+}
 
 export default function SubmissionRenderer({ submissionID, elements, responses }: Props) {
   const [formName, setFormName] = useState<string>("Loading...");
@@ -324,7 +423,6 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
   const [includeStamp, setIncludeStamp] = useState(false);
   const sigRef = useRef<SignatureCanvas | null>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
   const [sigChanged, setSigChanged] = useState(false);
   const [sigStatus, setSigStatus] = useState(""); // "" | "Saving..." | "Saved"
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -387,25 +485,6 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
     setPageGroups(groups);
   }, [elements]);
 
-  useEffect(() => {
-    const calculateScale = () => {
-      if (!viewerRef.current) return;
-
-      const rect = viewerRef.current.parentElement!.getBoundingClientRect(); // use right panel width
-      const pdfSize = PDF_SIZES[pageSize][orientation];
-
-      const scaleX = rect.width / pdfSize.w;
-      const scaleY = rect.height / pdfSize.h;
-
-      setScale(Math.min(scaleX, scaleY, 1)); // don’t scale > 1
-    };
-
-    calculateScale();
-    window.addEventListener("resize", calculateScale);
-    return () => window.removeEventListener("resize", calculateScale);
-  }, [pageSize, orientation, includeStamp]);
-
-
   const formattedDate =
     stampData.issuedDate
       ? new Date(stampData.issuedDate)
@@ -417,11 +496,10 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
         .toLocaleDateString("en-GB")
       : "";
 
-  const memoFirstPage = useMemo(
-    () => (pageGroups.length > 0 ? [pageGroups[0]] : []),
-    [pageGroups]
+  const memoFirstPageElements = useMemo(
+    () => getFirstPageElements(elements),
+    [elements]
   );
-
   const memoResponses = useMemo(
     () => resolveTablesForPDF(responses),
     [responses]
@@ -438,11 +516,12 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
 
   const handleExportPDF = async () => {
     setLoading(true);
-    const resolvedGroups = await prepareResolvedElements(pageGroups);
+    const resolvedElements = await prepareResolvedElements(elements);
     const resolvedResponses = resolveTablesForPDF(responses);
+
     const blob = await pdf(
       <PDFDocument
-        elements={resolvedGroups}
+        elements={resolvedElements}
         responses={resolvedResponses}
         formName={formName}
         revision={revision}
@@ -485,11 +564,11 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
   const handleSharePDF = async () => {
     setPdfLoading(true);
     try {
-      const resolvedGroups = await prepareResolvedElements(pageGroups);
+      const resolvedElements = await prepareResolvedElements(elements);
       const resolvedResponses = resolveTablesForPDF(responses);
       const blob = await pdf(
         <PDFDocument
-          elements={resolvedGroups}
+          elements={resolvedElements}
           responses={resolvedResponses}
           formName={formName}
           revision={revision}
@@ -569,44 +648,58 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
   };
 
 
-  /* const handleDownloadPDF = async () => {
-     setLoading(true);
-     try {
-       const resolvedGroups = await prepareResolvedElements(pageGroups);
- 
-       const blob = await pdf(
-         <PDFDocument
-           elements={resolvedGroups}
-           responses={responses}
-           formName={formName}
-           revision={revision}
-           orientation={orientation}
-           pageSize={pageSize}
-           docNumber={docNumber}
-           docNumberRevision={docNumberRevision}
-           equipmentName={equipmentName}
-           equipmentTag={equipmentTag}
-           stamp={
-             includeStamp
-               ? { ...stampData, issuedDate: formattedDate }
-               : undefined
-           }
-         />
-       ).toBlob();
- 
-       // download
-       const url = URL.createObjectURL(blob);
-       const link = document.createElement("a");
-       link.href = url;
-       const fileName = `${formName}_REV${revision}_${docNumber}_REV${docNumberRevision}.pdf`;
-       link.download = fileName;
-       link.click();
-     } catch (err) {
-       console.error("PDF generation error:", err);
-     } finally {
-       setLoading(false);
-     }
-   };*/
+ /* const handleDownloadPDF = async () => {
+    setLoading(true);
+
+    try {
+      const resolvedElements = await prepareResolvedElements(elements);
+      const resolvedResponses = resolveTablesForPDF(responses);
+
+      const blob = await pdf(
+        <PDFDocument
+          elements={resolvedElements}
+          responses={resolvedResponses}
+          formName={formName}
+          revision={revision}
+          orientation={orientation}
+          pageSize={pageSize}
+          docNumber={docNumber}
+          docNumberRevision={docNumberRevision}
+          equipmentName={equipmentName}
+          equipmentTag={equipmentTag}
+          stamp={
+            includeStamp
+              ? {
+                ...stampData,
+                issuedDate: formattedDate,
+                signedDate: formattedSignedDate,
+              }
+              : undefined
+          }
+        />
+      ).toBlob();
+
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${formName} REV. ${revision}_${docNumber} REV. ${docNumberRevision}_TEST.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF generation error:", err);
+      toast({
+        title: "Error",
+        description: "Failed to generate test PDF",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };*/
   function buildRows(elements: FormElementInstance[]) {
     const rows: FormElementInstance[][] = [];
     let currentRow: FormElementInstance[] = [];
@@ -700,7 +793,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                   <div className="flex flex-col md:flex-row gap-6 overflow-hidden px-4 pb-4 h-full">
                     {/* Left panel - fixed width */}
                     <div
-                      className="flex flex-col gap-4 overflow-y-auto w-[500px] flex-shrink-0 transition-all duration-300"
+                      className="flex flex-col gap-4  w-[500px] flex-shrink-0 transition-all duration-300"
                       style={{ maxHeight: includeStamp ? "85vh" : "40vh" }}
                     >
                       {/* Left panel content */}
@@ -779,7 +872,7 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
                           {loading ? "Generating..." : "Download PDF for Test"}
                         </Button>*/}
                         {includeStamp && (
-                          <div className="flex flex-col gap-3 overflow-y-auto max-h-[70vh]">
+                          <div className="flex flex-col gap-3  max-h-[70vh]">
                             <Label style={{ fontSize: 14 }}>
                               After filling in the details, press "Apply Stamp" and then click on the PDF preview to place the stamp.
                             </Label>
@@ -871,66 +964,45 @@ export default function SubmissionRenderer({ submissionID, elements, responses }
 
                     {/* Right panel: PDF preview only if stamp is included */}
                     <div className="flex-1 min-w-0 overflow-auto">
-                      {includeStamp && pageGroups.length > 0 && (
-                        <div
-                          ref={viewerRef}
-                          className="relative border rounded-md  bg-gray-50 cursor-crosshair"
-                          style={{
-                            width: PDF_SIZES[pageSize][orientation].w * scale + "px",
-                            height: PDF_SIZES[pageSize][orientation].h * scale + "px",
-                          }}
-                        >
-                          <PDFImagePreview
-                            firstPageGroup={memoFirstPage}
-                            responses={memoResponses}
-                            formName={formName}
-                            revision={revision}
-                            orientation={orientation}
-                            pageSize={pageSize}
-                            docNumber={docNumber}
-                            docNumberRevision={String(docNumberRevision)}
-                            equipmentName={equipmentName}
-                            equipmentTag={equipmentTag}
-                            includeStamp={includeStamp}
-                            stamp={memoStamp}
-                          />
-
-                          {/* Transparent overlay to capture clicks */}
+                      <div className="flex-1 min-w-0 overflow-auto">
+                        {includeStamp && pageGroups.length > 0 && (
                           <div
-                            className="absolute top-0 left-0 w-full h-full"
-                            style={{ cursor: "crosshair" }}
+                            ref={viewerRef}
+                            className="relative border rounded-md bg-gray-50 w-full h-[75vh] overflow-auto p-4"
                             onClick={(e) => {
-                              if (!viewerRef.current) return;
+                              const target = e.target as HTMLElement;
+                              const pageEl = target.closest("[data-stamp-page]") as HTMLDivElement | null;
+                              if (!pageEl) return;
 
-                              const rect = viewerRef.current.getBoundingClientRect();
-                              const scrollLeft = viewerRef.current.scrollLeft;
-                              const scrollTop = viewerRef.current.scrollTop;
+                              const rect = pageEl.getBoundingClientRect();
+                              const pageWidth = Number(pageEl.dataset.pageWidth || 595.28);
+                              const pageHeight = Number(pageEl.dataset.pageHeight || 841.89);
+                              const previewScale = Number(pageEl.dataset.previewScale || 1);
 
-                              // click relative to PDF container including scroll
-                              const clickX = e.clientX - rect.left + scrollLeft;
-                              const clickY = e.clientY - rect.top + scrollTop;
+                              const clickX = e.clientX - rect.left;
+                              const clickY = e.clientY - rect.top;
 
-                              const pdfWidth = PDF_SIZES[pageSize][orientation].w;
-                              const pdfHeight = PDF_SIZES[pageSize][orientation].h;
+                              const xPdf = clickX / previewScale - stampData.width / 2;
+                              const yPdf = clickY / previewScale - stampData.height / 2;
 
-                              const scaleX = rect.width / pdfWidth;
-                              const scaleY = rect.height / pdfHeight;
-                              const scaleFactor = Math.min(scaleX, scaleY);
-
-                              const xPdf = clickX / scaleFactor - stampData.width / 2;
-                              const yPdf = clickY / scaleFactor - stampData.height / 2;
-
-                              console.log({ clickX, clickY, xPdf, yPdf, scaleFactor, rect, scrollLeft, scrollTop });
-
-                              setStampData({
-                                ...stampData,
-                                x: Math.min(pdfWidth - stampData.width, Math.max(0, xPdf)),
-                                y: Math.min(pdfHeight - stampData.height, Math.max(0, yPdf)),
-                              });
+                              setStampData((prev) => ({
+                                ...prev,
+                                x: Math.min(pageWidth - prev.width, Math.max(0, xPdf)),
+                                y: Math.min(pageHeight - prev.height, Math.max(0, yPdf)),
+                              }));
                             }}
-                          />
-                        </div>
-                      )}
+                          >
+                            <FirstPageStampPreview
+                              elements={memoFirstPageElements}
+                              responses={memoResponses}
+                              orientation={orientation}
+                              pageSize={pageSize}
+                              stamp={memoStamp}
+                              previewScale={0.7}
+                            />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </DialogContent>

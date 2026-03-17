@@ -10,7 +10,7 @@ Font.register({
 });
 
 interface Props {
-  elements: FormElementInstance[][];
+  elements: FormElementInstance[];
   responses: { [key: string]: unknown };
   formName: string;
   revision: number | string;
@@ -961,9 +961,75 @@ function renderFieldValue(element: FormElementInstance, value: unknown, allValue
       );
   }
 }
+type PDFOrientation = "portrait" | "landscape";
+
+type PDFSection = {
+  elements: FormElementInstance[];
+  orientation: PDFOrientation;
+};
+
+function getPageDimensions(
+  pageSize: "A3" | "A4",
+  orientation: PDFOrientation
+): [number, number] {
+  const sizes = {
+    A4: { width: 595.28, height: 841.89 },
+    A3: { width: 841.89, height: 1190.55 },
+  };
+
+  const base = sizes[pageSize];
+
+  return orientation === "landscape"
+    ? [base.height, base.width]
+    : [base.width, base.height];
+}
+
+function splitElementsByPageBreak(
+  elements: FormElementInstance[],
+  defaultOrientation: PDFOrientation
+): PDFSection[] {
+  const sections: PDFSection[] = [];
+
+  let currentOrientation: PDFOrientation = defaultOrientation;
+  let currentElements: FormElementInstance[] = [];
+
+  for (const el of elements) {
+    if (el.type === "PageBreakField") {
+      if (currentElements.length > 0) {
+        sections.push({
+          elements: currentElements,
+          orientation: currentOrientation,
+        });
+      }
+
+      const nextOrientation =
+        el.extraAttributes?.nextPageOrientation &&
+          el.extraAttributes.nextPageOrientation !== "default"
+          ? (el.extraAttributes.nextPageOrientation as PDFOrientation)
+          : defaultOrientation;
+
+      currentOrientation = nextOrientation;
+      currentElements = [];
+      continue;
+    }
+
+    currentElements.push(el);
+  }
+
+  if (currentElements.length > 0) {
+    sections.push({
+      elements: currentElements,
+      orientation: currentOrientation,
+    });
+  }
+
+  return sections;
+}
 
 export default function PDFDocument({ elements, responses, formName, revision, orientation, pageSize, docNumber, docNumberRevision, equipmentName, equipmentTag, stamp }: Props) {
-  const repeatablesInOrder = elements[0]?.filter(el => el.extraAttributes?.repeatOnPageBreak) || [];
+  const repeatablesInOrder = elements.filter(
+    (el) => el.extraAttributes?.repeatOnPageBreak
+  );
   const repeatHeaderImage = repeatablesInOrder.find(el => el.type === "ImageField");
   const headerImagePosition = repeatHeaderImage?.extraAttributes?.position ?? "left";
   const preserveOriginalSize = repeatHeaderImage?.extraAttributes?.preserveOriginalSize;
@@ -1005,61 +1071,92 @@ export default function PDFDocument({ elements, responses, formName, revision, o
 
     return rows;
   }
+
+  const defaultOrientation: PDFOrientation =
+    orientation === "landscape" ? "landscape" : "portrait";
+
+  const fixedPageSize = pageSize || "A3";
+
+  const pdfSections = splitElementsByPageBreak(elements, defaultOrientation);
+
+  console.log("RAW ELEMENT TYPES", elements.map((e) => e.type));
+  console.log(
+    "PDF sections:",
+    pdfSections.map((s, i) => ({
+      index: i,
+      orientation: s.orientation,
+      elementTypes: s.elements.map((e) => e.type),
+    }))
+  );
+
   return (
     <Document>
-      {elements.map((group, pageIndex) =>
-        <Page key={pageIndex} style={styles.page} wrap orientation={orientation || "portrait"} size={pageSize || "A3"}>
-          {/* Header */}
-          <View fixed style={styles.header}>
-            {buildRows(repeatablesInOrder).map((row, rowIndex) => (
-              <View key={rowIndex} style={{ flexDirection: "row", width: "100%" }}>
-                {row.map((el) => {
-                  const width = el.width || 100;
-                  const value = responses[el.id];
+      {pdfSections.map((section, pageIndex) => {
+        const contentElements = section.elements.filter(
+          (el) =>
+            !repeatablesInOrder.some((r) => r.id === el.id) &&
+            el.type !== "PageBreakField"
+        );
 
-                  return (
-                    <View
-                      key={el.id}
-                      style={{
-                        width: `${width}%`,
-                        paddingRight: 6,
-                      }}
-                    >
-                      {el.type === "ImageField" ? (
-                        <Image src={el.extraAttributes?.imageUrl} style={imageStyle} />
-                      ) : (
-                        renderFieldValue(el, value, responses)
-                      )}
-                    </View>
-                  );
-                })}
+        const pageDimensions = getPageDimensions(
+          fixedPageSize,
+          section.orientation
+        );
+
+        return (
+          <Page
+            key={pageIndex}
+            style={styles.page}
+            wrap
+            size={pageDimensions}
+          >
+            {/* Header */}
+            <View fixed style={styles.header}>
+              {buildRows(repeatablesInOrder).map((row, rowIndex) => (
+                <View key={rowIndex} style={{ flexDirection: "row", width: "100%" }}>
+                  {row.map((el) => {
+                    const width = el.width || 100;
+                    const value = responses[el.id];
+
+                    return (
+                      <View
+                        key={el.id}
+                        style={{
+                          width: `${width}%`,
+                          paddingRight: 6,
+                        }}
+                      >
+                        {el.type === "ImageField" ? (
+                          <Image src={el.extraAttributes?.imageUrl} style={imageStyle} />
+                        ) : (
+                          renderFieldValue(el, value, responses)
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+
+            <View fixed style={styles.headerContainer}>
+              <View style={styles.headerContent}>
+                <Text>{equipmentName} | {equipmentTag}</Text>
               </View>
-            ))}
-          </View>
-          {/* Header */}
-
-          <View fixed style={styles.headerContainer}>
-            <View style={styles.headerContent}>
-              <Text>{equipmentName} | {equipmentTag}</Text>
             </View>
-          </View>
 
-          {/* Footer */}
-          <View fixed style={styles.footerContainer}>
-            <View style={styles.footerLine} />
-            <View style={styles.footerContent}>
-              <Text>{formName} REV. {revision} | {docNumber} REV. {docNumberRevision} </Text>
-              <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+            {/* Footer */}
+            <View fixed style={styles.footerContainer}>
+              <View style={styles.footerLine} />
+              <View style={styles.footerContent}>
+                <Text>
+                  {formName} REV. {revision} | {docNumber} REV. {docNumberRevision}
+                </Text>
+                <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+              </View>
             </View>
-          </View>
 
-          {/* Page Content */}
-          {(() => {
-            const contentElements = group.filter(
-              el => !repeatablesInOrder.some(r => r.id === el.id)
-            );
-
-            return buildRows(contentElements).map((row, rowIndex) => (
+            {/* Page Content */}
+            {buildRows(contentElements).map((row, rowIndex) => (
               <View key={rowIndex} style={{ flexDirection: "row", width: "100%" }}>
                 {row.map((element) => {
                   const value = responses[element.id];
@@ -1086,45 +1183,51 @@ export default function PDFDocument({ elements, responses, formName, revision, o
                   );
                 })}
               </View>
-            ));
-          })()}
+            ))}
 
-
-
-          {/* Stamp overlay: must come AFTER all content */}
-          {pageIndex === 0 && stamp && (
-            <View
-              style={{
-                position: "absolute",
-                top: stamp.y,   // from SubmissionRenderer
-                left: stamp.x,  // from SubmissionRenderer
-                width: stamp.width,
-                height: stamp.height,
-              }}
-              fixed
-            >
-              <Image src={STAMP_SRC} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 29.5, left: 83 }]}>{stamp.issuedDate}</Text>
-              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 35, left: 83 }]}>{stamp.reviewer}</Text>
-              <Text style={[stylesStamp.stampText, { fontSize: 6, top: 41, left: 83 }]}>{stamp.reviewerRole}</Text>
-              {stamp.signed && (
+            {/* Stamp overlay */}
+            {pageIndex === 0 && stamp && (
+              <View
+                style={{
+                  position: "absolute",
+                  top: stamp.y,
+                  left: stamp.x,
+                  width: stamp.width,
+                  height: stamp.height,
+                }}
+                fixed
+              >
                 <Image
-                  src={stamp.signed}
-                  style={{
-                    position: "absolute",
-                    top: 45,      // adjust inside stamp
-                    left: 40,     // adjust inside stamp
-                    width: 110,
-                    height: 13,
-                    objectFit: "contain",
-                  }}
+                  src={STAMP_SRC}
+                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
                 />
-              )}
-            </View>
-          )}
-
-        </Page>
-      )}
+                <Text style={[stylesStamp.stampText, { fontSize: 6, top: 29.5, left: 83 }]}>
+                  {stamp.issuedDate}
+                </Text>
+                <Text style={[stylesStamp.stampText, { fontSize: 6, top: 35, left: 83 }]}>
+                  {stamp.reviewer}
+                </Text>
+                <Text style={[stylesStamp.stampText, { fontSize: 6, top: 41, left: 83 }]}>
+                  {stamp.reviewerRole}
+                </Text>
+                {stamp.signed && (
+                  <Image
+                    src={stamp.signed}
+                    style={{
+                      position: "absolute",
+                      top: 45,
+                      left: 40,
+                      width: 110,
+                      height: 13,
+                      objectFit: "contain",
+                    }}
+                  />
+                )}
+              </View>
+            )}
+          </Page>
+        );
+      })}
     </Document>
   );
 }

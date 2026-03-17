@@ -15,6 +15,9 @@ export const PageBreakFieldFormElement: FormElement = {
     type,
     label: "Page Break",
     height: 60,
+    extraAttributes: {
+      nextPageOrientation: "default",
+    },
   }),
   designerBtnElement: {
     icon: RiFilePaper2Line,
@@ -25,6 +28,3 @@ export const PageBreakFieldFormElement: FormElement = {
   propertiesComponent: PropertiesComponent,
   validate: () => true,
 };
-
-
-

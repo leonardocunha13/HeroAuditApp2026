@@ -3,7 +3,6 @@ import { Button } from "./ui/button";
 import { MdPreview } from "react-icons/md";
 import useDesigner from "./hooks/useDesigner";
 import PDFDocument from "./PDFComponent";
-import { FormElementInstance } from "./FormElements";
 import { pdf } from "@react-pdf/renderer";
 import {
   Select,
@@ -33,37 +32,14 @@ function PreviewPDFDialogBtn({ id, formName, revision }: { id: string; formName:
   const generateAndOpenPDF = async () => {
     setSelectedElement(null);
     setLoading(true);
+
     await saveBeforePreview();
-    const groups: FormElementInstance[][] = [];
-    const repeatables: FormElementInstance[] = [];
-    let current: FormElementInstance[] = [];
-    let firstPage = true;
 
-    elements.forEach((el) => {
-      if (el.type === "PageBreakField") {
-        if (current.length > 0) {
-          groups.push(firstPage ? [...current] : [...repeatables, ...current]);
-          current = [];
-          firstPage = false;
-        }
-      } else {
-        if (el.extraAttributes?.repeatOnPageBreak && firstPage) {
-          repeatables.push(el);
-        }
-        current.push(el);
-      }
-    });
-
-    if (current.length > 0) {
-      groups.push(firstPage ? [...current] : [...repeatables, ...current]);
-    }
-
-    // 🔧 resolve image URLs *before* passing to the component
-    const resolvedGroups = await prepareResolvedElements(groups);
+    const resolvedElements = await prepareResolvedElements(elements);
 
     const blob = await pdf(
       <PDFDocument
-        elements={resolvedGroups} 
+        elements={resolvedElements}
         responses={{}}
         formName={formName || "Unknown Document Number"}
         revision={revision}

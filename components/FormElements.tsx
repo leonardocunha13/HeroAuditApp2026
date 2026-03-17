@@ -87,6 +87,7 @@ interface TextFieldExtraAttributes {
   content?: string;
   headerRowIndexes?: number[];
   fontSize?: number;
+  nextPageOrientation?: "portrait" | "landscape" | "default";
 }
 
 export type FormElementInstance = {
