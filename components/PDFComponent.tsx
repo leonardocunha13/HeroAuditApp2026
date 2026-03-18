@@ -1433,6 +1433,108 @@ export default function PDFDocument({ elements, responses, formName, revision, o
     ? { width, height: "auto", objectFit: "contain", ...alignStyle }
     : { width, height, objectFit: "contain", ...alignStyle };
 
+  function renderContentInOrder(
+    elements: FormElementInstance[],
+    section: PDFSection,
+    pageIndex: number
+  ) {
+    const blocks: React.ReactNode[] = [];
+    let currentRow: FormElementInstance[] = [];
+    let currentWidth = 0;
+
+    const flushRow = () => {
+      if (!currentRow.length) return;
+
+      const rowToRender = currentRow;
+      currentRow = [];
+      currentWidth = 0;
+
+      blocks.push(
+        <View
+          key={`row-${blocks.length}`}
+          style={{ flexDirection: "row", width: "100%" }}
+        >
+          {rowToRender.map((element) => {
+            const value = responses[element.id];
+            const width = element.width || 100;
+
+            return (
+              <View
+                key={element.id}
+                style={{
+                  width: `${width}%`,
+                  paddingRight: 6,
+                  marginBottom: 6,
+                }}
+                wrap={false}
+              >
+                {element.type !== "SeparatorField" &&
+                  element.type !== "CheckboxField" && (
+                    <Text style={styles.fieldTitle}>
+                      {element.extraAttributes?.label}
+                    </Text>
+                  )}
+
+                {renderFieldValue(element, value, responses, {
+                  pageSize: section.pageSize,
+                  orientation: section.orientation,
+                  isFirstPage: pageIndex === 0,
+                  stampHeight: stamp?.height ?? 0,
+                })}
+              </View>
+            );
+          })}
+        </View>
+      );
+    };
+
+    elements.forEach((element) => {
+      const width = element.width || 100;
+
+      if (element.type === "TableField") {
+        flushRow();
+
+        const value = responses[element.id];
+
+        blocks.push(
+          <View
+            key={element.id}
+            style={{
+              width: "100%",
+              marginBottom: 6,
+            }}
+          >
+            {element.extraAttributes?.label && (
+              <Text style={styles.fieldTitle}>
+                {element.extraAttributes.label}
+              </Text>
+            )}
+
+            {renderFieldValue(element, value, responses, {
+              pageSize: section.pageSize,
+              orientation: section.orientation,
+              isFirstPage: pageIndex === 0,
+              stampHeight: stamp?.height ?? 0,
+            })}
+          </View>
+        );
+
+        return;
+      }
+
+      if (currentWidth + width > 100) {
+        flushRow();
+      }
+
+      currentRow.push(element);
+      currentWidth += width;
+    });
+
+    flushRow();
+
+    return blocks;
+  }
+
   function buildRows(elements: FormElementInstance[]) {
     const rows: FormElementInstance[][] = [];
     let currentRow: FormElementInstance[] = [];
@@ -1485,8 +1587,6 @@ export default function PDFDocument({ elements, responses, formName, revision, o
             !repeatablesInOrder.some((r) => r.id === el.id) &&
             el.type !== "PageBreakField"
         );
-        const normalElements = contentElements.filter((el) => el.type !== "TableField");
-        const tableElements = contentElements.filter((el) => el.type === "TableField");
         const pageDimensions = getPageDimensions(
           section.pageSize,
           section.orientation
@@ -1531,7 +1631,7 @@ export default function PDFDocument({ elements, responses, formName, revision, o
                 </View>
               ))}
             </View>
-
+            {renderContentInOrder(contentElements, section, pageIndex)}
             <View fixed style={styles.headerContainer}>
               <View style={styles.headerContent}>
                 <Text>{equipmentName} | {equipmentTag}</Text>
@@ -1549,68 +1649,6 @@ export default function PDFDocument({ elements, responses, formName, revision, o
               </View>
             </View>
 
-            {/* Page Content */}
-            {buildRows(normalElements).map((row, rowIndex) => (
-              <View key={rowIndex} style={{ flexDirection: "row", width: "100%" }}>
-                {row.map((element) => {
-                  const value = responses[element.id];
-                  const width = element.width || 100;
-
-                  return (
-                    <View
-                      key={element.id}
-                      style={{
-                        width: `${width}%`,
-                        paddingRight: 6,
-                        marginBottom: 6,
-                      }}
-                      wrap={false}
-                    >
-                      {element.type !== "SeparatorField" &&
-                        element.type !== "CheckboxField" && (
-                          <Text style={styles.fieldTitle}>
-                            {element.extraAttributes?.label}
-                          </Text>
-                        )}
-
-                      {renderFieldValue(element, value, responses, {
-                        pageSize: section.pageSize,
-                        orientation: section.orientation,
-                        isFirstPage: pageIndex === 0,
-                        stampHeight: stamp?.height ?? 0,
-                      })}
-                    </View>
-                  );
-                })}
-              </View>
-            ))}
-
-            {tableElements.map((element) => {
-              const value = responses[element.id];
-
-              return (
-                <View
-                  key={element.id}
-                  style={{
-                    width: "100%",
-                    marginBottom: 6,
-                  }}
-                >
-                  {element.extraAttributes?.label && (
-                    <Text style={styles.fieldTitle}>
-                      {element.extraAttributes.label}
-                    </Text>
-                  )}
-
-                  {renderFieldValue(element, value, responses, {
-                    pageSize: section.pageSize,
-                    orientation: section.orientation,
-                    isFirstPage: pageIndex === 0,
-                    stampHeight: stamp?.height ?? 0,
-                  })}
-                </View>
-              );
-            })}
             {/* Stamp overlay */}
             {pageIndex === 0 && stamp && (
               <View
