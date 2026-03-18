@@ -572,10 +572,10 @@ function renderFieldValue(
       const isLandscape = pageContext?.orientation === "landscape";
 
       // base sizes by page setup
-      let headerFontSize = isA3 ? 9 : 8;
-      let bodyFontSize = isA3 ? 8 : 7;
-      let cellPadding = isA3 ? 3 : 2.5;
-      let minRowHeight = isA3 ? 18 : 16;
+      let headerFontSize = isA3 ? 10 : 9;
+      let bodyFontSize = isA3 ? 9 : 8;
+      let cellPadding = isA3 ? 3.5 : 3;
+      let minRowHeight = isA3 ? 20 : 18;
 
       // adjust by orientation
       if (isLandscape) {
@@ -654,8 +654,8 @@ function renderFieldValue(
           : 1;
 
       // scale typography first
-      const scaledHeaderFontSize = Math.max(5, Math.min(11, headerFontSize * widthScale));
-      const scaledBodyFontSize = Math.max(4.5, Math.min(10, bodyFontSize * widthScale));
+      const scaledHeaderFontSize = Math.max(6.5, Math.min(12, headerFontSize * widthScale));
+      const scaledBodyFontSize = Math.max(6, Math.min(11, bodyFontSize * widthScale));
       const scaledCellPadding = Math.max(1, Math.min(4, cellPadding * widthScale));
       const scaledMinRowHeight = Math.max(10, minRowHeight * widthScale);
 
