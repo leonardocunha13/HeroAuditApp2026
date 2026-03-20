@@ -776,8 +776,49 @@ function renderFieldValue(
           const cellWidth = finalColumnWidths
             .slice(colIndex, colIndex + span)
             .reduce((sum, w) => sum + w, 0);
+          const breakLongToken = (word: string, chunkSize = 18) => {
+            if (word.length <= chunkSize) return word;
 
-          const cellText = parseCell(evaluatedTableData[rowIndex]?.[colIndex] || "");
+            const parts: string[] = [];
+            for (let i = 0; i < word.length; i += chunkSize) {
+              parts.push(word.slice(i, i + chunkSize));
+            }
+
+            return parts.join("\n");
+          };
+
+          const isTechnicalToken = (word: string) => {
+            return (
+              word.length > 18 && (
+                word.includes("_") ||
+                word.includes("-") ||
+                word.includes("/") ||
+                word.includes("\\") ||
+                /[A-Z0-9]{6,}/.test(word) // long uppercase/ID-like
+              )
+            );
+          };
+
+          const formatCellTextForPdf = (text: string) => {
+            if (!text) return "";
+
+            return text
+              .split("\n")
+              .map((line) =>
+                line
+                  .split(/\s+/)
+                  .map((word) =>
+                    isTechnicalToken(word)
+                      ? breakLongToken(word, 18)
+                      : word
+                  )
+                  .join(" ")
+              )
+              .join("\n");
+          };
+          const cellText = formatCellTextForPdf(
+            parseCell(evaluatedTableData[rowIndex]?.[colIndex] || "")
+          );
 
           const isImage = String(evaluatedTableData[rowIndex]?.[colIndex] || "").startsWith("[image:");
           const cellHeight = isImage
@@ -806,6 +847,17 @@ function renderFieldValue(
           rowChunks.length === 0
             ? usableHeight - firstPageExtraHeight - estimatedHeaderHeight
             : usableHeight - estimatedHeaderHeight;
+
+        if (rowHeight >= availableHeight * 0.75) {
+          if (currentChunk.length > 0) {
+            rowChunks.push(currentChunk);
+            currentChunk = [];
+            currentHeight = 0;
+          }
+
+          rowChunks.push([rowIndex]);
+          return;
+        }
 
         if (
           currentChunk.length > 0 &&
@@ -937,19 +989,58 @@ function renderFieldValue(
                       styles.tableRow,
                       isHeaderRow ? { backgroundColor: "#eee" } : {},
                     ]}
-                    wrap={false}
+                  //wrap={false}
                   >
                     {(() => {
                       const cells = [];
                       let colIndex = 0;
+                      const breakLongToken = (word: string, chunkSize = 18) => {
+                        if (word.length <= chunkSize) return word;
 
+                        const parts: string[] = [];
+                        for (let i = 0; i < word.length; i += chunkSize) {
+                          parts.push(word.slice(i, i + chunkSize));
+                        }
+
+                        return parts.join("\n");
+                      };
+
+                      const isTechnicalToken = (word: string) => {
+                        return (
+                          word.length > 18 && (
+                            word.includes("_") ||
+                            word.includes("-") ||
+                            word.includes("/") ||
+                            word.includes("\\") ||
+                            /[A-Z0-9]{6,}/.test(word) // long uppercase/ID-like
+                          )
+                        );
+                      };
+
+                      const formatCellTextForPdf = (text: string) => {
+                        if (!text) return "";
+
+                        return text
+                          .split("\n")
+                          .map((line) =>
+                            line
+                              .split(/\s+/)
+                              .map((word) =>
+                                isTechnicalToken(word)
+                                  ? breakLongToken(word, 18)
+                                  : word
+                              )
+                              .join(" ")
+                          )
+                          .join("\n");
+                      };
                       while (colIndex < columns) {
                         const rawCellValueOriginal = tableData[rowIndex]?.[colIndex] || "";
                         const rawCellValueDisplay = evaluatedTableData[rowIndex]?.[colIndex] || "";
                         const displayTrimmed = rawCellValueDisplay.trim();
                         const displayMergeMatch = displayTrimmed.match(/^\[merge:(right|down):\d+\](.*)/);
                         const cleanedValueDisplay = displayMergeMatch ? displayMergeMatch[2]?.trim() : displayTrimmed;
-                        const cellText = parseCell(rawCellValueDisplay);
+                        const cellText = formatCellTextForPdf(parseCell(rawCellValueDisplay));
                         const rawTrimmed = rawCellValueOriginal.trim();
                         const mergePrefixMatch = rawTrimmed.match(/^\[merge:(right|down):\d+\](.*)/);
                         const span = isMergedRight(rawTrimmed) ? getMergeRightSpan(rawTrimmed) : 1;
@@ -999,7 +1090,7 @@ function renderFieldValue(
                                 borderLeft: isMergedRightFromLeft ? "none" : "1pt solid black",
                                 borderRight: skipRendering ? "1pt solid black" : "none",
                               }}
-                              wrap={false}
+                            //wrap={false}
                             />
                           );
                           colIndex++;
@@ -1069,7 +1160,6 @@ function renderFieldValue(
                               <Text
                                 style={{
                                   fontFamily: "DejaVuSans",
-                                  minHeight: scaledMinRowHeight,
                                   fontSize: scaledBodyFontSize,
                                   textAlign: isCenteredCell || isHeaderRow ? "center" : "left",
                                   fontWeight: isHeaderRow ? 600 : undefined,
