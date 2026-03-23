@@ -8,17 +8,43 @@ interface ExtraAttributes {
 }
 
 interface FormContentItem {
+  id: string;
   type: string;
+  value?: unknown;
   extraAttributes?: ExtraAttributes;
 }
 
 interface ParsedContent {
   formContent: FormContentItem[];
+  responses?: Record<string, unknown>;
 }
 
 interface TableSummary {
   checkbox: { checked: number; unchecked: number; neutral: number };
   passFail: { pass: number; fail: number; notapplicable: number };
+}
+
+function stripMergePrefix(cell: string): string {
+  return cell.replace(/^\[merge:(right|down):\d+\]/, "").trim();
+}
+
+function parseMaybeTable(value: unknown): TableData | null {
+  if (!value) return null;
+
+  if (Array.isArray(value)) {
+    return value as TableData;
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? (parsed as TableData) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
 }
 
 function generateTableSummary(tables: TableData[]): TableSummary {
@@ -29,20 +55,38 @@ function generateTableSummary(tables: TableData[]): TableSummary {
 
   for (const table of tables) {
     for (const row of table) {
-      for (const cell of row) {
+      for (const rawCell of row) {
+        const cell = stripMergePrefix(String(rawCell || ""));
+
+        if (!cell) continue;
+
         // checkbox counting
-        if (cell?.startsWith("[checkbox")) {
+        if (cell.startsWith("[checkbox")) {
           if (cell === "[checkbox:true]") summary.checkbox.checked++;
           else if (cell === "[checkbox:false]") summary.checkbox.unchecked++;
           else summary.checkbox.neutral++;
+          continue;
         }
+
         // pass/fail counting
-        else if (cell === "[PASS]") summary.passFail.pass++;
-        else if (cell === "[FAIL]") summary.passFail.fail++;
-        else if (cell === "[SUMMARY]") summary.passFail.notapplicable++;
+        if (cell === "[PASS]") {
+          summary.passFail.pass++;
+          continue;
+        }
+
+        if (cell === "[FAIL]") {
+          summary.passFail.fail++;
+          continue;
+        }
+
+        if (cell === "[SUMMARY]" || cell === "[N/A]") {
+          summary.passFail.notapplicable++;
+          continue;
+        }
       }
     }
   }
+
   return summary;
 }
 
@@ -53,30 +97,43 @@ export function SubmissionSummary({ submissionId }: { submissionId: string }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        if (submissionId && submissionId.trim() !== "") {
-          const contentRaw = await GetFormsContent(submissionId);
-          let content: ParsedContent;
+        if (!submissionId || submissionId.trim() === "") return;
 
-          if (typeof contentRaw === "string") {
-            try {
-              content = JSON.parse(contentRaw) as ParsedContent;
-            } catch {
-              setError("Failed to parse content");
-              return;
-            }
-          } else {
-            content = contentRaw as unknown as ParsedContent;
-          }
+        const contentRaw = await GetFormsContent(submissionId);
+        let content: ParsedContent;
 
-          if (Array.isArray(content.formContent)) {
-            const tableDataArrays: TableData[] = content.formContent
-              .filter((item) => item.type === "TableField")
-              .map((item) => item.extraAttributes?.data || []);
-            setTablesData(tableDataArrays);
-          } else {
-            setError("Invalid content format");
+        if (typeof contentRaw === "string") {
+          try {
+            content = JSON.parse(contentRaw) as ParsedContent;
+          } catch {
+            setError("Failed to parse content");
+            return;
           }
+        } else if (contentRaw && typeof contentRaw === "object") {
+          content = contentRaw as ParsedContent;
+        } else {
+          setError("Content is empty or invalid");
+          return;
         }
+
+        if (!Array.isArray(content.formContent)) {
+          setError("Invalid content format");
+          return;
+        }
+
+        const tableDataArrays: TableData[] = content.formContent
+          .filter((item) => item.type === "TableField")
+          .map((item) => {
+            const responseValue = content.responses?.[item.id];
+
+            const submittedTable = parseMaybeTable(responseValue);
+
+            if (submittedTable) return submittedTable;
+
+            return item.extraAttributes?.data || [];
+          });
+
+        setTablesData(tableDataArrays);
       } catch (err) {
         console.error("Error fetching content:", err);
         setError("Failed to fetch content");
@@ -111,7 +168,7 @@ export function SubmissionSummary({ submissionId }: { submissionId: string }) {
           </div>
           <div className="flex items-center gap-2">
             <span className="px-2 py-1 rounded border border-gray-500 text-gray-400 bg-white">–</span>
-            <span> {summary.checkbox.neutral}</span>
+            <span>{summary.checkbox.neutral}</span>
           </div>
         </div>
       </div>
@@ -134,6 +191,5 @@ export function SubmissionSummary({ submissionId }: { submissionId: string }) {
         </div>
       </div>
     </div>
-
   );
 }
