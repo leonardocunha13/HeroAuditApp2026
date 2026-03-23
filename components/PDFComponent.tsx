@@ -160,6 +160,7 @@ function renderFieldValue(
     orientation: "portrait" | "landscape";
     isFirstPage?: boolean;
     stampHeight?: number;
+    containerWidthPercent?: number;
   }
 ) {
 
@@ -496,68 +497,76 @@ function renderFieldValue(
         const widths = Array(columnCount).fill(0);
         const isDateColumn = Array(columnCount).fill(false);
 
-        const getHeaderWeight = (text: string) => {
-          // technical headers with underscores usually need more room
-          if (text.includes("_")) return 1.22;
-          if (text.includes("-")) return 1.22;
-          if (text.length <= 4) return 1.05;
-          return 1.1;
+        const getVisibleText = (raw: string) => parseCell(raw || "").trim();
+
+        const getLongestWordLength = (text: string) => {
+          return Math.max(
+            ...text.split(/\s+/).map((w) => w.length),
+            0
+          );
+        };
+
+        const getTextScore = (text: string) => {
+          const clean = text.trim();
+          if (!clean) return 0;
+
+          const totalLen = clean.length;
+          const longestWord = getLongestWordLength(clean);
+
+          // balance between full text size and difficult-to-wrap words
+          return totalLen * 0.65 + longestWord * 1.1;
         };
 
         for (let colIndex = 0; colIndex < columnCount; colIndex++) {
-          const rawHeader = columnHeaders[colIndex] || "";
-          const headerText = parseCell(rawHeader).trim();
+          const headerText = getVisibleText(columnHeaders[colIndex] || "");
+          const headerScore = Math.max(getTextScore(headerText), 6);
 
-          const cleanHeader = headerText || `Col ${colIndex + 1}`;
-
-          // header width estimate
-          const headerCharWidth =
-            cleanHeader === cleanHeader.toUpperCase() ? headerFontSize * 0.72 : headerFontSize * 0.64;
-
-          const headerPadding = 16;
-          const headerWeight = getHeaderWeight(cleanHeader);
-
-          const headerEstimatedWidth =
-            Math.max(cleanHeader.length, 4) * headerCharWidth * headerWeight + headerPadding;
-
-          widths[colIndex] = Math.max(widths[colIndex], headerEstimatedWidth);
+          // header contributes strongly
+          widths[colIndex] = headerScore * (headerFontSize * 0.9) + 16;
         }
 
         tableData.forEach((row) => {
           row.forEach((cell, colIndex) => {
-            const parsed = parseCell(cell).trim();
+            const raw = String(cell || "").trim();
+            const parsed = getVisibleText(raw);
 
-            if (String(cell).trim().startsWith("[date:")) {
+            if (raw.startsWith("[date:")) {
               isDateColumn[colIndex] = true;
             }
 
-            const safeLen = Math.min(Math.max(parsed.length + 14, 1), 24);
+            if (!parsed) return;
 
-            let charWidth = bodyFontSize * 0.62;
+            const score = getTextScore(parsed);
 
-            if (String(cell).trim().startsWith("[date:")) {
-              charWidth = bodyFontSize * 0.95;
+            let charFactor = bodyFontSize * 0.72;
+
+            if (raw.startsWith("[date:")) {
+              charFactor = bodyFontSize * 0.95;
             } else if (!isNaN(Number(parsed))) {
-              charWidth = bodyFontSize * 0.78;
+              charFactor = bodyFontSize * 0.78;
+            } else if (parsed.length <= 4) {
+              charFactor = bodyFontSize * 0.85;
             }
 
-            const bodyEstimatedWidth = safeLen * charWidth + 10;
-
-            widths[colIndex] = Math.max(widths[colIndex], bodyEstimatedWidth);
+            const estimated = score * charFactor + 14;
+            widths[colIndex] = Math.max(widths[colIndex], estimated);
           });
         });
 
         const baseMinWidth =
-          isA3 ? 58 :
-            isLandscape ? 34 : 30;
+          isA3 && isLandscape ? 55 :
+            isA3 ? 48 :
+              isLandscape ? 42 : 36;
 
         const dateMinWidth =
-          isA3 ? 85 :
-            isLandscape ? 52 : 48;
+          isA3 && isLandscape ? 72 :
+            isA3 ? 64 :
+              isLandscape ? 58 : 52;
 
         const maxWidth =
-          isA3 ? 320 :
-            isLandscape ? 120 : 100;
+          isA3 && isLandscape ? 260 :
+            isA3 ? 220 :
+              isLandscape ? 180 : 150;
 
         return widths.map((w, colIndex) =>
           Math.min(
@@ -632,10 +641,20 @@ function renderFieldValue(
       cellPadding = Math.min(Math.max(cellPadding, 1), 4);
       minRowHeight = Math.max(minRowHeight, 10);
 
-      const { usableWidth, usableHeight } = getUsablePageArea(
+      const { usableWidth: pageUsableWidth, usableHeight } = getUsablePageArea(
         pageContext?.pageSize || "A4",
         pageContext?.orientation || "portrait",
         !!element.extraAttributes?.label
+      );
+
+      const containerWidthPercent = (pageContext?.containerWidthPercent ?? element.width ?? 100) / 100;
+
+      // match the same gutter/padding you use in the row item
+      const horizontalGutter = 6;
+
+      const usableWidth = Math.max(
+        40,
+        pageUsableWidth * containerWidthPercent - horizontalGutter
       );
 
       // first pass estimate
@@ -670,7 +689,6 @@ function renderFieldValue(
 
       const totalEstimatedWidth = estimatedWidths.reduce((sum, w) => sum + w, 0);
 
-      // final widths used everywhere
       const finalColumnWidths =
         totalEstimatedWidth <= usableWidth
           ? estimatedWidths.map((w) => (w / totalEstimatedWidth) * usableWidth)
@@ -735,14 +753,14 @@ function renderFieldValue(
         return Math.max(1, totalLines);
       };
 
-      const estimateRowHeight = (rowIndex: number) => {
+      const estimateRowHeight = (rowIndex: number, visibleColumns?: number[]) => {
         let maxHeight = scaledMinRowHeight;
+        const colsToUse = visibleColumns ?? Array.from({ length: columns }, (_, i) => i);
 
-        for (let colIndex = 0; colIndex < columns; colIndex++) {
+        for (const colIndex of colsToUse) {
           const rawCellValueOriginal = tableData[rowIndex]?.[colIndex] || "";
           const rawTrimmed = rawCellValueOriginal.trim();
 
-          // skip cells hidden by merge-down from above
           let skipRendering = false;
           for (let startRow = 0; startRow < rowIndex; startRow++) {
             const cellAbove = tableData[startRow]?.[colIndex]?.trim() || "";
@@ -757,7 +775,6 @@ function renderFieldValue(
           }
           if (skipRendering) continue;
 
-          // skip cells covered by merge-right from left
           let isMergedRightFromLeft = false;
           for (let j = 0; j < colIndex; j++) {
             const leftValue = tableData[rowIndex]?.[j]?.trim() || "";
@@ -776,46 +793,42 @@ function renderFieldValue(
           const cellWidth = finalColumnWidths
             .slice(colIndex, colIndex + span)
             .reduce((sum, w) => sum + w, 0);
+
           const breakLongToken = (word: string, chunkSize = 18) => {
             if (word.length <= chunkSize) return word;
-
             const parts: string[] = [];
             for (let i = 0; i < word.length; i += chunkSize) {
               parts.push(word.slice(i, i + chunkSize));
             }
-
             return parts.join("\n");
           };
 
           const isTechnicalToken = (word: string) => {
             return (
-              word.length > 18 && (
+              word.length > 18 &&
+              (
                 word.includes("_") ||
                 word.includes("-") ||
                 word.includes("/") ||
                 word.includes("\\") ||
-                /[A-Z0-9]{6,}/.test(word) // long uppercase/ID-like
+                /[A-Z0-9]{6,}/.test(word)
               )
             );
           };
 
           const formatCellTextForPdf = (text: string) => {
             if (!text) return "";
-
             return text
               .split("\n")
               .map((line) =>
                 line
                   .split(/\s+/)
-                  .map((word) =>
-                    isTechnicalToken(word)
-                      ? breakLongToken(word, 18)
-                      : word
-                  )
+                  .map((word) => (isTechnicalToken(word) ? breakLongToken(word, 18) : word))
                   .join(" ")
               )
               .join("\n");
           };
+
           const cellText = formatCellTextForPdf(
             parseCell(evaluatedTableData[rowIndex]?.[colIndex] || "")
           );
@@ -877,91 +890,59 @@ function renderFieldValue(
       }
 
       const renderTableHeader = () => {
+        const headerCells: React.ReactNode[] = [];
+        let colIndex = 0;
+
+        while (colIndex < columns) {
+          const raw = columnHeaders[colIndex] || "";
+          const trimmed = raw.trim();
+
+          const match = trimmed.match(/^\[merge:right:(\d+)\](.*)$/);
+          const span = match ? parseInt(match[1], 10) : 1;
+          const text = match ? match[2].trim() : parseCell(raw);
+
+          const mergedWidth = finalColumnWidths
+            .slice(colIndex, colIndex + span)
+            .reduce((sum, w) => sum + w, 0);
+
+          headerCells.push(
+            <View
+              key={`header-${colIndex}`}
+              style={{
+                backgroundColor: "#eee",
+                width: mergedWidth,
+                minHeight: 28,
+                alignItems: "center",
+                borderTop: "1pt solid black",
+                borderBottom: "1pt solid black",
+                borderLeft: "1pt solid black",
+                borderRight: "1pt solid black",
+                padding: scaledCellPadding,
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+              wrap={false}
+            >
+              <Text
+                style={{
+                  fontSize: scaledHeaderFontSize,
+                  textAlign: "center",
+                  fontWeight: 600,
+                  fontFamily: "DejaVuSans",
+                  lineHeight: 1.1,
+                }}
+              >
+                {text}
+              </Text>
+            </View>
+          );
+
+          colIndex += span;
+        }
+
         return (
           <View style={styles.tableRow} wrap={false}>
-            {(() => {
-              const headerCells = [];
-              let colIndex = 0;
-
-              while (colIndex < columns) {
-                const raw = columnHeaders[colIndex] || "";
-                const trimmed = raw.trim();
-                const match = trimmed.match(/^\[merge:right:(\d+)\](.*)$/);
-                const span = match ? parseInt(match[1], 10) : 1;
-                const text = match ? match[2].trim() : parseCell(raw);
-
-                const mergedWidth = finalColumnWidths
-                  .slice(colIndex, colIndex + span)
-                  .reduce((sum, w) => sum + w, 0);
-                let isMergedRightFromLeft = false;
-                for (let j = 0; j < colIndex; j++) {
-                  const left = columnHeaders[j]?.trim() || "";
-                  if (isMergedRight(left)) {
-                    const leftSpan = getMergeRightSpan(left);
-                    if (j + leftSpan > colIndex) {
-                      isMergedRightFromLeft = true;
-                      break;
-                    }
-                  }
-                }
-
-                let leftBorder = "1pt solid black";
-                let rightBorder = "1pt solid black";
-
-                if (isMergedRightFromLeft) {
-                  leftBorder = "none";
-
-                  let showRightBorder = false;
-                  for (let j = 0; j < colIndex; j++) {
-                    const left = columnHeaders[j]?.trim() || "";
-                    if (isMergedRight(left)) {
-                      const leftSpan = getMergeRightSpan(left);
-                      const endCol = j + leftSpan - 1;
-                      if (colIndex <= endCol) {
-                        showRightBorder = colIndex === endCol;
-                        break;
-                      }
-                    }
-                  }
-
-                  rightBorder = showRightBorder ? "1pt solid black" : "none";
-                }
-
-                headerCells.push(
-                  <View
-                    key={`header-${colIndex}`}
-                    style={{
-                      backgroundColor: "#eee",
-                      width: mergedWidth,
-                      borderTop: "1pt solid black",
-                      borderBottom: "1pt solid black",
-                      borderLeft: leftBorder,
-                      borderRight: rightBorder,
-                      padding: scaledCellPadding,
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                    wrap={false}
-                  >
-                    <Text
-                      style={{
-                        fontSize: scaledHeaderFontSize,
-                        textAlign: "center",
-                        fontWeight: 600,
-                        fontFamily: "DejaVuSans",
-                        lineHeight: pageContext?.pageSize === "A4" ? 1.0 : 1.15,
-                      }}
-                    >
-                      {text}
-                    </Text>
-                  </View>
-                );
-
-                colIndex += span;
-              }
-
-              return headerCells;
-            })()}
+            {headerCells}
           </View>
         );
       };
@@ -971,99 +952,85 @@ function renderFieldValue(
           {rowChunks.map((chunk, chunkIndex) => (
             <View
               key={`table-chunk-${chunkIndex}`}
-              style={[
-                styles.table,
-                chunkIndex > 0 ? { marginTop: 0 } : {}
-              ]}
+              style={styles.table}
               break={chunkIndex > 0}
             >
               {renderTableHeader()}
 
               {chunk.map((rowIndex) => {
                 const isHeaderRow = headerRowIndexes.includes(rowIndex);
+                const rowHeight = estimateRowHeight(rowIndex);
 
                 return (
                   <View
-                    key={rowIndex}
+                    key={`row-${chunkIndex}-${rowIndex}`}
                     style={[
                       styles.tableRow,
+                      {
+                        minHeight: rowHeight,
+                        alignItems: "stretch",
+                      },
                       isHeaderRow ? { backgroundColor: "#eee" } : {},
                     ]}
-                  //wrap={false}
                   >
                     {(() => {
-                      const cells = [];
+                      const cells: React.ReactNode[] = [];
                       let colIndex = 0;
-                      const breakLongToken = (word: string, chunkSize = 18) => {
-                        if (word.length <= chunkSize) return word;
 
+                      const breakLongToken = (word: string, chunkSize = 16) => {
+                        if (word.length <= chunkSize) return word;
                         const parts: string[] = [];
                         for (let i = 0; i < word.length; i += chunkSize) {
                           parts.push(word.slice(i, i + chunkSize));
                         }
-
                         return parts.join("\n");
                       };
 
                       const isTechnicalToken = (word: string) => {
                         return (
-                          word.length > 18 && (
+                          word.length > 16 &&
+                          (
                             word.includes("_") ||
                             word.includes("-") ||
                             word.includes("/") ||
                             word.includes("\\") ||
-                            /[A-Z0-9]{6,}/.test(word) // long uppercase/ID-like
+                            /[A-Z0-9]{6,}/.test(word)
                           )
                         );
                       };
 
                       const formatCellTextForPdf = (text: string) => {
                         if (!text) return "";
-
                         return text
                           .split("\n")
                           .map((line) =>
                             line
                               .split(/\s+/)
-                              .map((word) =>
-                                isTechnicalToken(word)
-                                  ? breakLongToken(word, 18)
-                                  : word
-                              )
+                              .map((word) => (isTechnicalToken(word) ? breakLongToken(word, 16) : word))
                               .join(" ")
                           )
                           .join("\n");
                       };
+
                       while (colIndex < columns) {
                         const rawCellValueOriginal = tableData[rowIndex]?.[colIndex] || "";
                         const rawCellValueDisplay = evaluatedTableData[rowIndex]?.[colIndex] || "";
-                        const displayTrimmed = rawCellValueDisplay.trim();
-                        const displayMergeMatch = displayTrimmed.match(/^\[merge:(right|down):\d+\](.*)/);
-                        const cleanedValueDisplay = displayMergeMatch ? displayMergeMatch[2]?.trim() : displayTrimmed;
-                        const cellText = formatCellTextForPdf(parseCell(rawCellValueDisplay));
                         const rawTrimmed = rawCellValueOriginal.trim();
-                        const mergePrefixMatch = rawTrimmed.match(/^\[merge:(right|down):\d+\](.*)/);
-                        const span = isMergedRight(rawTrimmed) ? getMergeRightSpan(rawTrimmed) : 1;
 
-                        const cleanedValue = mergePrefixMatch ? mergePrefixMatch[2]?.trim() : rawTrimmed;
-
-                        const width = finalColumnWidths
-                          .slice(colIndex, colIndex + span)
-                          .reduce((sum, w) => sum + w, 0);
-
-                        let isMergedRightFromLeft = false;
+                        let coveredByMergeRight = false;
                         for (let j = 0; j < colIndex; j++) {
                           const leftValue = tableData[rowIndex]?.[j]?.trim() || "";
                           if (isMergedRight(leftValue)) {
                             const leftSpan = getMergeRightSpan(leftValue);
-                            if (j + leftSpan > colIndex) {
-                              isMergedRightFromLeft = true;
+                            const endCol = j + leftSpan - 1;
+                            if (colIndex <= endCol) {
+                              coveredByMergeRight = true;
                               break;
                             }
                           }
                         }
 
-                        let skipRendering = false;
+                        let coveredByMergeDown = false;
                         let showBottomBorder = false;
 
                         for (let startRow = 0; startRow < rowIndex; startRow++) {
@@ -1072,35 +1039,51 @@ function renderFieldValue(
                             const spanDown = getMergeDownSpan(cellAbove);
                             const endRow = startRow + spanDown - 1;
                             if (rowIndex <= endRow) {
-                              skipRendering = true;
+                              coveredByMergeDown = true;
                               showBottomBorder = rowIndex === endRow;
                               break;
                             }
                           }
                         }
 
-                        if (skipRendering || isMergedRightFromLeft) {
+                        if (coveredByMergeRight || coveredByMergeDown) {
+                          const width = finalColumnWidths[colIndex];
+
                           cells.push(
                             <View
-                              key={`cell-${rowIndex}-${colIndex}`}
+                              key={`placeholder-${chunkIndex}-${rowIndex}-${colIndex}`}
                               style={{
                                 width,
-                                borderTop: skipRendering ? "none" : "1pt solid black",
+                                minHeight: rowHeight,
+                                borderLeft: coveredByMergeRight ? "none" : "1pt solid black",
+                                borderRight: "1pt solid black",
+                                borderTop: coveredByMergeDown ? "none" : "1pt solid black",
                                 borderBottom: showBottomBorder ? "1pt solid black" : "none",
-                                borderLeft: isMergedRightFromLeft ? "none" : "1pt solid black",
-                                borderRight: skipRendering ? "1pt solid black" : "none",
                               }}
-                            //wrap={false}
+                              wrap={false}
                             />
                           );
+
                           colIndex++;
                           continue;
                         }
 
+                        const span = isMergedRight(rawTrimmed) ? getMergeRightSpan(rawTrimmed) : 1;
+
+                        const width = finalColumnWidths
+                          .slice(colIndex, colIndex + span)
+                          .reduce((sum, w) => sum + w, 0);
+
+                        const displayTrimmed = rawCellValueDisplay.trim();
+                        const displayMergeMatch = displayTrimmed.match(/^\[merge:(right|down):\d+\](.*)/);
+                        const cleanedValueDisplay = displayMergeMatch ? displayMergeMatch[2]?.trim() : displayTrimmed;
+
+                        const cellText = formatCellTextForPdf(parseCell(rawCellValueDisplay));
+
                         const isShortText =
                           cleanedValueDisplay.length > 0 &&
                           cleanedValueDisplay.length <= 3 &&
-                          isNaN(Number(cleanedValue));
+                          isNaN(Number(cleanedValueDisplay));
 
                         const isEuropeanNumber =
                           /^[0-9]{1,3}(\.[0-9]{3})*,[0-9]+$/.test(cleanedValueDisplay) ||
@@ -1119,25 +1102,19 @@ function renderFieldValue(
                           cleanedValueDisplay.startsWith("[date:") ||
                           !isNaN(Number(cleanedValueDisplay)) ||
                           isEuropeanNumber ||
-                          /^[0-9]+(\.[0-9]+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValueDisplay) ||
-                          /^[0-9]+(,[0-9]+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValueDisplay) ||
-                          /^-?\d+(\.\d+)?\s*[a-zA-Z]{1,3}$/.test(cleanedValueDisplay) ||
-                          /^-?\d+,\d+\s*[a-zA-Z]{1,3}$/.test(cleanedValueDisplay) ||
                           isShortText;
 
-                        let bottomBorder = "1pt solid black";
-                        if (isMergedDown(rawCellValueOriginal)) {
-                          bottomBorder = "none";
-                        }
+                        const bottomBorder = isMergedDown(rawTrimmed) ? "none" : "1pt solid black";
 
                         cells.push(
                           <View
-                            key={`cell-${rowIndex}-${colIndex}`}
+                            key={`cell-${chunkIndex}-${rowIndex}-${colIndex}`}
                             style={[
                               styles.tableCell,
                               {
                                 padding: scaledCellPadding,
                                 width,
+                                minHeight: rowHeight,
                                 borderLeft: "1pt solid black",
                                 borderRight: "1pt solid black",
                                 borderTop: "1pt solid black",
@@ -1169,7 +1146,7 @@ function renderFieldValue(
                                       : cellText === "FAIL"
                                         ? "red"
                                         : "#000",
-                                  lineHeight: pageContext?.pageSize === "A4" ? 1.05 : 1.15,
+                                  lineHeight: 1.25,
                                 }}
                               >
                                 {cellText === "SUMMARY" ? "-" : cellText}
@@ -1555,6 +1532,7 @@ export default function PDFDocument({ elements, responses, formName, revision, o
                   width: `${width}%`,
                   paddingRight: 6,
                   marginBottom: 6,
+                  flexShrink: 0,
                 }}
                 wrap={false}
               >
@@ -1570,6 +1548,7 @@ export default function PDFDocument({ elements, responses, formName, revision, o
                   orientation: section.orientation,
                   isFirstPage: pageIndex === 0,
                   stampHeight: stamp?.height ?? 0,
+                  containerWidthPercent: width,
                 })}
               </View>
             );
@@ -1581,35 +1560,64 @@ export default function PDFDocument({ elements, responses, formName, revision, o
     elements.forEach((element) => {
       const width = element.width || 100;
 
+      // IMPORTANT: tables must not live inside a wrap={false} row wrapper
       if (element.type === "TableField") {
-        flushRow();
-
+        const width = element.width || 100;
         const value = responses[element.id];
 
-        blocks.push(
-          <View
-            key={element.id}
-            style={{
-              width: "100%",
-              marginBottom: 6,
-            }}
-          >
-            {element.extraAttributes?.label && (
-              <Text style={styles.fieldTitle}>
-                {element.extraAttributes.label}
-              </Text>
-            )}
+        const parsedTable =
+          typeof value === "string"
+            ? (() => {
+              try {
+                return JSON.parse(value);
+              } catch {
+                return null;
+              }
+            })()
+            : Array.isArray(value)
+              ? value
+              : Array.isArray(element.extraAttributes?.data)
+                ? element.extraAttributes?.data
+                : null;
 
-            {renderFieldValue(element, value, responses, {
-              pageSize: section.pageSize,
-              orientation: section.orientation,
-              isFirstPage: pageIndex === 0,
-              stampHeight: stamp?.height ?? 0,
-            })}
-          </View>
-        );
+        const tableRows = Array.isArray(parsedTable) ? parsedTable.length : 0;
+        const tableCols = Array.isArray(parsedTable)
+          ? Math.max(...parsedTable.map((r: string[]) => r.length), 0)
+          : 0;
 
-        return;
+        // force full width only for large tables
+        const shouldRenderFullWidth =
+          width >= 100 || tableCols > 6 || tableRows > 8;
+
+        if (shouldRenderFullWidth) {
+          flushRow();
+
+          blocks.push(
+            <View
+              key={element.id}
+              style={{
+                width: "100%",
+                marginBottom: 6,
+              }}
+            >
+              {element.extraAttributes?.label && (
+                <Text style={styles.fieldTitle}>
+                  {element.extraAttributes.label}
+                </Text>
+              )}
+
+              {renderFieldValue(element, value, responses, {
+                pageSize: section.pageSize,
+                orientation: section.orientation,
+                isFirstPage: pageIndex === 0,
+                stampHeight: stamp?.height ?? 0,
+                containerWidthPercent: 100,
+              })}
+            </View>
+          );
+
+          return;
+        }
       }
 
       if (currentWidth + width > 100) {
