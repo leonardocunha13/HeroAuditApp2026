@@ -971,6 +971,22 @@
               "get",
               "list"
             ]
+          },
+          "public/signatures/*": {
+            "groupsadmin": [
+              "get",
+              "list",
+              "write"
+            ],
+            "groupsuser": [
+              "get",
+              "list",
+              "write"
+            ],
+            "guest": [
+              "get",
+              "list"
+            ]
           }
         }
       }

@@ -833,7 +833,10 @@ function renderFieldValue(
             parseCell(evaluatedTableData[rowIndex]?.[colIndex] || "")
           );
 
-          const isImage = String(evaluatedTableData[rowIndex]?.[colIndex] || "").startsWith("[image:");
+          const rawCellForImage = String(evaluatedTableData[rowIndex]?.[colIndex] || "");
+          const isImage =
+            rawCellForImage.startsWith("[image:") ||
+            rawCellForImage.startsWith("[signature:");
           const cellHeight = isImage
             ? 64
             : estimateTextLines(cellText, cellWidth, scaledBodyFontSize) *
@@ -1091,9 +1094,13 @@ function renderFieldValue(
                           /^[0-9]+,[0-9]{3}$/.test(cleanedValueDisplay) ||
                           /^-?\d+(?:\.\d{3})*,\d+$/.test(cleanedValueDisplay);
 
-                        const isImage = cleanedValueDisplay.startsWith("[image:");
-                        const imageBase64 =
-                          cleanedValueDisplay.match(/^\[image:(data:image\/[a-zA-Z]+;base64,.*?)\]$/)?.[1];
+                        const isImage =
+                          cleanedValueDisplay.startsWith("[image:") ||
+                          cleanedValueDisplay.startsWith("[signature:");
+
+                        const imageSrc =
+                          cleanedValueDisplay.match(/^\[image:(.*?)\]$/)?.[1] ||
+                          cleanedValueDisplay.match(/^\[signature:(.*?)\]$/)?.[1];
 
                         const isCenteredCell =
                           ["[checkbox:true]", "[checkbox:false]", "[checkbox]"].includes(cleanedValueDisplay) ||
@@ -1124,9 +1131,9 @@ function renderFieldValue(
                             ]}
                             wrap={false}
                           >
-                            {isImage && imageBase64 ? (
+                            {isImage && imageSrc ? (
                               <Image
-                                src={imageBase64}
+                                src={imageSrc}
                                 style={{
                                   height: 60,
                                   objectFit: "contain",

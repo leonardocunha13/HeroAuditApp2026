@@ -10,6 +10,10 @@ export const storage = defineStorage({
       allow.groups(['user']).to(['read', 'write']),
       allow.guest.to(['read']),
     ],
+    'public/signatures/*': [
+      allow.groups(['admin']).to(['read', 'write']),
+      allow.groups(['user']).to(['read', 'write']),
+      allow.guest.to(['read']),
+    ],
   }),
 });
-

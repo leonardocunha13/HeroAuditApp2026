@@ -22,6 +22,7 @@ import { CameraCell } from "../CameraCell"
 import { Textarea } from "../ui/textarea";
 import Image from "next/image"; // ✅ Import next/image
 import { formValueStore } from "../formValueStore";
+import { SignatureCell } from "../SignatureCell";
 
 export function FormComponent({
   elementInstance,
@@ -55,25 +56,25 @@ export function FormComponent({
       ? element.extraAttributes.data
       : [];
   })();
-   const [editableData, setEditableData] = useState<string[][]>(initialData);
+  const [editableData, setEditableData] = useState<string[][]>(initialData);
   const storeValues = useSyncExternalStore(
     (listener) => formValueStore.subscribe(listener),
     () => formValueStore.getValues(),
     () => formValueStore.getValues()
   );
   const displayData = useMemo(() => {
-  if (!readOnly) return editableData;
+    if (!readOnly) return editableData;
 
-  return editableData.map((row) =>
-    row.map((cell) => {
-      const raw = (cell ?? "").toString().trim();
-      return raw.startsWith("=")
-        ? evaluateTableFormula(raw, editableData)
-        : cell;
-    })
-  );
-}, [editableData, readOnly, storeValues]);
- 
+    return editableData.map((row) =>
+      row.map((cell) => {
+        const raw = (cell ?? "").toString().trim();
+        return raw.startsWith("=")
+          ? evaluateTableFormula(raw, editableData)
+          : cell;
+      })
+    );
+  }, [editableData, readOnly, storeValues]);
+
 
 
   const [editableCells] = useState(() =>
@@ -522,6 +523,8 @@ export function FormComponent({
                 const isCheckbox = rawContent.startsWith("[checkbox");
                 const isSelect = rawContent.startsWith("[select");
                 const isNumber = rawContent.startsWith("[number");
+                const isSignaturePlaceholder = rawContent === "[signature]";
+                const isSavedSignature  = rawContent.startsWith("[signature:");
                 const numberValue = isNumber ? rawContent.match(/^\[number:(.*?)\]$/)?.[1] ?? "" : "";
                 const isDate = rawContent.startsWith("[date:");
                 let dateValue: Date | null = null;
@@ -718,6 +721,14 @@ export function FormComponent({
                       >
                         {evaluateTableFormula(rawContent, editableData)}
                       </div>
+                    ) : isSignaturePlaceholder || isSavedSignature  ? (
+                      <SignatureCell
+                        row={row}
+                        col={col}
+                        value={cellValue}
+                        handleCellChange={handleCellChange}
+                        readOnly={readOnly ?? false}
+                      />
                     ) : (
                       <div
                         className="break-words"

@@ -468,6 +468,7 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
                 Use <code>[SUMMARY]</code> to display buttons to select the overall result of the table.<br />
                 Use <code>[merge:right:#]Text</code> to merge with # cells to the right.<br />
                 Use <code>[merge:down:#]Text</code> to merge with # cells below.<br />
+                Use <code>[signature]</code> to open a signature pad and capture a handwritten signature.<br />
                 Use <code>" "</code> (a single space) to create a non-editable empty cell.<br />
                 The table supports formulas, including references to other tables using <code>{`={tableID:ColRow}`}</code>. To reference cells within the same table, simply use the cell address (e.g., A1) without any prefix.<br />
                 For a regular editable text field, leave the cell blank.
@@ -606,7 +607,13 @@ export function PropertiesComponent({ elementInstance }: { elementInstance: Form
           >
             📅
           </Button>
-
+          <Button
+            size="sm"
+            onClick={() => insertTag("[signature]")}
+            title="Signature"
+          >
+            ✍️
+          </Button>
           <Button
             size="sm"
             onClick={() => insertTag("[camera]")}
